@@ -1,0 +1,401 @@
+package com.example.viewmodel
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.data.FormFitDatabase
+import com.example.data.FormFitRepository
+import com.example.data.UserStats
+import com.example.data.WorkoutSession
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+
+data class LeaderboardEntry(
+    val name: String,
+    val xp: Int,
+    val rank: Int,
+    val characterIcon: String,
+    val isUser: Boolean = false
+)
+
+data class Badge(
+    val id: String,
+    val title: String,
+    val description: String,
+    val icon: String,
+    val requirement: String
+)
+
+class WorkoutViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val database = androidx.room.Room.databaseBuilder(
+        application,
+        FormFitDatabase::class.java,
+        "formfit_database"
+    ).build()
+
+    private val repository = FormFitRepository(database.workoutDao(), database.userStatsDao())
+
+    val allSessions: StateFlow<List<WorkoutSession>> = repository.allSessions
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val userStats: StateFlow<UserStats> = repository.userStats
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = UserStats()
+        )
+
+    // Current Active Workout State
+    private val _isActiveSession = MutableStateFlow(false)
+    val isActiveSession = _isActiveSession.asStateFlow()
+
+    private val _currentExercise = MutableStateFlow("Squat")
+    val currentExercise = _currentExercise.asStateFlow()
+
+    private val _repCount = MutableStateFlow(0)
+    val repCount = _repCount.asStateFlow()
+
+    private val _sessionSeconds = MutableStateFlow(0)
+    val sessionSeconds = _sessionSeconds.asStateFlow()
+
+    private val _currentFeedback = MutableStateFlow("Position yourself in front of the camera")
+    val currentFeedback = _currentFeedback.asStateFlow()
+
+    private val _currentScore = MutableStateFlow(100)
+    val currentScore = _currentScore.asStateFlow()
+
+    private val _repScores = MutableStateFlow<List<Int>>(emptyList())
+    val repScores = _repScores.asStateFlow()
+
+    private val _mistakesList = MutableStateFlow<List<String>>(emptyList())
+    val mistakesList = _mistakesList.asStateFlow()
+
+    private val _isVirtualCoachMode = MutableStateFlow(true)
+    val isVirtualCoachMode = _isVirtualCoachMode.asStateFlow()
+
+    // Last completed session summary state (to display on summary screen)
+    private val _lastCompletedSession = MutableStateFlow<WorkoutSession?>(null)
+    val lastCompletedSession = _lastCompletedSession.asStateFlow()
+
+    // Available achievements/badges
+    val badgesList = listOf(
+        Badge("first_workout", "First Steps", "Completed your very first FormFit workout!", "🔥", "Complete 1 workout"),
+        Badge("streak_7", "Unstoppable", "Maintained a 7-day workout streak!", "⚡", "Reach a 7-day streak"),
+        Badge("perfect_squats", "Squat Deity", "Completed 100 perfect squats!", "👑", "100 squats with >90% form"),
+        Badge("form_master", "Form Master", "Achieved an average form score of over 90%!", "🎓", "Avg form score >90%")
+    )
+
+    // Static + dynamic Leaderboard
+    private val _leaderboard = MutableStateFlow<List<LeaderboardEntry>>(emptyList())
+    val leaderboard = _leaderboard.asStateFlow()
+
+    private var timerJob: Job? = null
+    private var simulationJob: Job? = null
+
+    init {
+        updateLeaderboard(0)
+        
+        // Observe all sessions to unlock progressive badges
+        viewModelScope.launch {
+            allSessions.collect { sessions ->
+                evaluateComplexBadges(sessions)
+            }
+        }
+    }
+
+    private fun evaluateComplexBadges(sessions: List<WorkoutSession>) {
+        viewModelScope.launch {
+            val stats = repository.getUserStatsDirect()
+            val unlocked = stats.unlockedBadgesCsv.split(",").filter { it.isNotEmpty() }.toMutableSet()
+            
+            // 1. Perfect squats counter
+            var totalPerfectSquats = 0
+            for (s in sessions) {
+                if (s.exerciseType == "Squat" && s.averageScore >= 90) {
+                    totalPerfectSquats += s.totalReps
+                }
+            }
+            if (totalPerfectSquats >= 10) { // Keep MVP easy to achieve: 10 perfect squats for demo
+                if (unlocked.add("perfect_squats")) {
+                    repository.unlockBadge("perfect_squats")
+                }
+            }
+
+            // 2. Form Master check
+            val hasFormMaster = sessions.any { it.averageScore >= 90 && it.totalReps >= 5 }
+            if (hasFormMaster) {
+                if (unlocked.add("form_master")) {
+                    repository.unlockBadge("form_master")
+                }
+            }
+        }
+    }
+
+    fun updateLeaderboard(userXpContribution: Int) {
+        viewModelScope.launch {
+            val stats = repository.getUserStatsDirect()
+            // Recalculate total XP including historical ones
+            val totalXp = stats.level * 350 + stats.currentXp + userXpContribution
+            
+            val baseEntries = listOf(
+                LeaderboardEntry("Duo the Owl", 1250, 1, "🦉"),
+                LeaderboardEntry("Lily (Goth)", 980, 2, "👧"),
+                LeaderboardEntry("Zari (Enthusiast)", 750, 3, "👱‍♀️"),
+                LeaderboardEntry("Your Score", totalXp, 4, "💪", isUser = true),
+                LeaderboardEntry("Vikram (Reader)", 450, 5, "🧔"),
+                LeaderboardEntry("Oscar (Artist)", 220, 6, "👨‍🎨")
+            )
+
+            // Re-sort entries by XP
+            val sorted = baseEntries.sortedByDescending { it.xp }
+            val reRanked = sorted.mapIndexed { index, entry ->
+                entry.copy(rank = index + 1)
+            }
+            _leaderboard.value = reRanked
+        }
+    }
+
+    fun setVirtualCoachMode(enabled: Boolean) {
+        _isVirtualCoachMode.value = enabled
+        if (_isActiveSession.value) {
+            // Restart practice jobs if exercise is running
+            startWorkout(_currentExercise.value)
+        }
+    }
+
+    fun startWorkout(exerciseType: String) {
+        _currentExercise.value = exerciseType
+        _isActiveSession.value = true
+        _repCount.value = 0
+        _sessionSeconds.value = 0
+        _repScores.value = emptyList()
+        _mistakesList.value = emptyList()
+        _currentScore.value = 100
+        _currentFeedback.value = when (exerciseType) {
+            "Squat" -> "Get ready to squat! Stand straight."
+            "Push-up" -> "Get into plank position. Prepare to lower."
+            "Lunge" -> "Prepare to lunge. Keep hips square."
+            "Plank" -> "Hold a solid plank. Keep body straight!"
+            else -> "Ready!"
+        }
+
+        timerJob?.cancel()
+        timerJob = viewModelScope.launch {
+            while (_isActiveSession.value) {
+                delay(1000)
+                _sessionSeconds.value += 1
+                if (_currentExercise.value == "Plank" && _isActiveSession.value) {
+                    // Plank counts "reps" as seconds of perfect plank holding
+                    if (_currentScore.value >= 85) {
+                        _repCount.value += 1
+                    }
+                }
+            }
+        }
+
+        simulationJob?.cancel()
+        if (_isVirtualCoachMode.value) {
+            startVirtualCoachSimulation(exerciseType)
+        }
+    }
+
+    private fun startVirtualCoachSimulation(exerciseType: String) {
+        simulationJob = viewModelScope.launch {
+            var cycleProgress = 0f // 0f to 1f representation of rep completion
+            var goingDown = true
+            
+            while (_isActiveSession.value) {
+                delay(80) // ~12 FPS simulation update loop
+                
+                if (goingDown) {
+                    cycleProgress += 0.05f
+                    if (cycleProgress >= 1f) {
+                        cycleProgress = 1f
+                        goingDown = false
+                    }
+                } else {
+                    cycleProgress -= 0.05f
+                    if (cycleProgress <= 0f) {
+                        cycleProgress = 0f
+                        goingDown = true
+                        
+                        // Completed a full repetition!
+                        // Calculate score of the completed rep
+                        val formScore = if (Math.random() > 0.15) {
+                            (85..100).random()
+                        } else {
+                            (50..80).random() // Trigger random mistake rep sometimes
+                        }
+                        
+                        _currentScore.value = formScore
+                        _repScores.value = _repScores.value + formScore
+
+                        if (exerciseType != "Plank") {
+                            _repCount.value += 1
+                        }
+
+                        // Form Feedback & Mistake Categorization
+                        if (formScore >= 85) {
+                            _currentFeedback.value = when (exerciseType) {
+                                "Squat" -> "Excellent squat depth! Perfect posture."
+                                "Push-up" -> "Perfect push-up! Keep it up."
+                                "Lunge" -> "Great alignment! Excellent balance."
+                                else -> "Keep holding! Body is straight."
+                            }
+                        } else {
+                            val mistake = when (exerciseType) {
+                                "Squat" -> if (Math.random() > 0.5) {
+                                    "Squat not deep enough"
+                                } else {
+                                    "Knees collapsing inward"
+                                }
+                                "Push-up" -> if (Math.random() > 0.5) {
+                                    "Push-up not deep enough"
+                                } else {
+                                    "Hip sagging"
+                                }
+                                "Lunge" -> "Incorrect lunge knee alignment"
+                                "Plank" -> "Hip sagging during plank"
+                                else -> "Incorrect posture"
+                            }
+                            
+                            _mistakesList.value = _mistakesList.value + mistake
+                            _currentFeedback.value = when (mistake) {
+                                "Squat not deep enough" -> "Go lower! Get thighs parallel to the ground."
+                                "Knees collapsing inward" -> "Keep your knees aligned with your toes."
+                                "Push-up not deep enough" -> "Chest closer to the ground!"
+                                "Hip sagging" -> "Engage your core to keep hips level."
+                                "Incorrect lunge knee alignment" -> "Don't let front knee pass your toes."
+                                "Hip sagging during plank" -> "Lift your hips up. Keep core engaged."
+                                else -> "Correct your form!"
+                            }
+                        }
+                    }
+                }
+                
+                // Real-time angle computation simulations
+                if (exerciseType == "Plank") {
+                    // Random minor fluctuations
+                    val randomScore = if (Math.random() > 0.10) (85..100).random() else (60..80).random()
+                    _currentScore.value = randomScore
+                    if (randomScore < 85) {
+                        _currentFeedback.value = "Engage your core! Hips are sagging."
+                        if (Math.random() > 0.5) {
+                            _mistakesList.value = _mistakesList.value + "Hip sagging during plank"
+                        }
+                    } else {
+                        _currentFeedback.value = "Great plank form! Hold it steady."
+                    }
+                }
+            }
+        }
+    }
+
+    // This method is called from real Camera Analyzer frames when Camera Mode is active
+    fun processCameraFrameAnalysis(
+        score: Int,
+        mistake: String?,
+        feedback: String,
+        isRepCompleted: Boolean
+    ) {
+        _currentScore.value = score
+        _currentFeedback.value = feedback
+        
+        if (mistake != null && Math.random() > 0.7) { // limit spam
+            _mistakesList.value = _mistakesList.value + mistake
+        }
+
+        if (isRepCompleted) {
+            _repCount.value += 1
+            _repScores.value = _repScores.value + score
+        }
+    }
+
+    fun stopAndSaveWorkout() {
+        _isActiveSession.value = false
+        timerJob?.cancel()
+        simulationJob?.cancel()
+
+        val exercise = _currentExercise.value
+        val reps = _repCount.value
+        val duration = _sessionSeconds.value
+        val mistakes = _mistakesList.value.size
+        
+        // Form metrics math
+        val avgScore = if (_repScores.value.isNotEmpty()) {
+            _repScores.value.average().toInt()
+        } else if (exercise == "Plank") {
+            // For plank, calculate based on overall score state
+            if (mistakes > 0) (80..92).random() else (92..100).random()
+        } else {
+            0
+        }
+        
+        val bestScore = if (_repScores.value.isNotEmpty()) {
+            _repScores.value.maxOrNull() ?: 0
+        } else if (exercise == "Plank") {
+            if (mistakes == 0) 100 else 90
+        } else {
+            0
+        }
+
+        // Gamification XP Formula:
+        // Base XP: 20 XP for session completion
+        // Rep XP: 5 XP per correct rep (>80 form score), 2 XP per lower-quality rep
+        // Plank XP: 1 XP per second held with good form
+        var xpEarned = 20
+        if (exercise == "Plank") {
+            xpEarned += reps // seconds held with good form
+        } else {
+            _repScores.value.forEach { score ->
+                xpEarned += if (score >= 80) 5 else 2
+            }
+        }
+
+        // Reward extra XP for High Form Quality (Form Master bonus)
+        if (avgScore >= 90 && reps >= 5) {
+            xpEarned += 30 // 30 XP bonus
+        }
+
+        val session = WorkoutSession(
+            exerciseType = exercise,
+            totalReps = reps,
+            durationSeconds = duration,
+            averageScore = avgScore,
+            bestScore = bestScore,
+            mistakeCount = mistakes,
+            xpEarned = xpEarned
+        )
+
+        _lastCompletedSession.value = session
+
+        viewModelScope.launch {
+            repository.insertSession(session)
+            updateLeaderboard(xpEarned)
+        }
+    }
+
+    fun abandonWorkout() {
+        _isActiveSession.value = false
+        timerJob?.cancel()
+        simulationJob?.cancel()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        timerJob?.cancel()
+        simulationJob?.cancel()
+        database.close()
+    }
+}
