@@ -125,6 +125,42 @@ fun DashboardScreen(
             }
         }
 
+        // HERO BANNER WITH THEMED DUMBBELL LOGO
+        item {
+            DuoCard(
+                modifier = Modifier.fillMaxWidth(),
+                backgroundColor = Color(0xFFF1F8E9),
+                borderColor = DuoGreen
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "DUO'S IRON TEMPLE",
+                            color = DuoGreen,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 11.sp,
+                            letterSpacing = 1.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Lift with perfect form to keep Duo happy and earn double XP!",
+                            color = DuoInk,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 14.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    com.example.ui.components.DuoDumbbellLogo(
+                        modifier = Modifier.size(72.dp)
+                    )
+                }
+            }
+        }
+
         // DUO THE OWL SPEECH BUBBLE
         item {
             Row(

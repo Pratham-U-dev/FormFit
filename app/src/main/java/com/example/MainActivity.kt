@@ -38,6 +38,7 @@ enum class ActiveScreen {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.example.audio.DuoSoundPlayer.init(this)
         enableEdgeToEdge()
         setContent {
             FormFitTheme {

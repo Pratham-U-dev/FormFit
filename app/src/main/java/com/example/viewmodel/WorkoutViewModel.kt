@@ -247,6 +247,7 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
 
                         // Form Feedback & Mistake Categorization
                         if (formScore >= 85) {
+                            com.example.audio.DuoSoundPlayer.playCorrect()
                             _currentFeedback.value = when (exerciseType) {
                                 "Squat" -> "Excellent squat depth! Perfect posture."
                                 "Push-up" -> "Perfect push-up! Keep it up."
@@ -254,6 +255,7 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                                 else -> "Keep holding! Body is straight."
                             }
                         } else {
+                            com.example.audio.DuoSoundPlayer.playMistake()
                             val mistake = when (exerciseType) {
                                 "Squat" -> if (Math.random() > 0.5) {
                                     "Squat not deep enough"
@@ -292,7 +294,11 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                     if (randomScore < 85) {
                         _currentFeedback.value = "Engage your core! Hips are sagging."
                         if (Math.random() > 0.5) {
+                            val previousSize = _mistakesList.value.size
                             _mistakesList.value = _mistakesList.value + "Hip sagging during plank"
+                            if (_mistakesList.value.size > previousSize) {
+                                com.example.audio.DuoSoundPlayer.playMistake()
+                            }
                         }
                     } else {
                         _currentFeedback.value = "Great plank form! Hold it steady."
@@ -313,12 +319,21 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         _currentFeedback.value = feedback
         
         if (mistake != null && Math.random() > 0.7) { // limit spam
+            val previousSize = _mistakesList.value.size
             _mistakesList.value = _mistakesList.value + mistake
+            if (_mistakesList.value.size > previousSize) {
+                com.example.audio.DuoSoundPlayer.playMistake()
+            }
         }
 
         if (isRepCompleted) {
             _repCount.value += 1
             _repScores.value = _repScores.value + score
+            if (score >= 85) {
+                com.example.audio.DuoSoundPlayer.playCorrect()
+            } else {
+                com.example.audio.DuoSoundPlayer.playMistake()
+            }
         }
     }
 
@@ -326,6 +341,8 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         _isActiveSession.value = false
         timerJob?.cancel()
         simulationJob?.cancel()
+        
+        com.example.audio.DuoSoundPlayer.playFanfare()
 
         val exercise = _currentExercise.value
         val reps = _repCount.value

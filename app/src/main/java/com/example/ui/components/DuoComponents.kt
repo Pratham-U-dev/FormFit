@@ -2,6 +2,7 @@ package com.example.ui.components
 
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -28,7 +30,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -69,7 +75,10 @@ fun DuoButton(
                 interactionSource = interactionSource,
                 indication = null,
                 enabled = enabled,
-                onClick = onClick
+                onClick = {
+                    com.example.audio.DuoSoundPlayer.playClick()
+                    onClick()
+                }
             )
     ) {
         // Shadow base
@@ -165,3 +174,108 @@ fun DuoCard(
 
 // Ensure ColumnScope is available for DuoCard
 typealias ColumnScope = androidx.compose.foundation.layout.ColumnScope
+
+@Composable
+fun DuoDumbbellLogo(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(120.dp)) {
+        val w = size.width
+        val h = size.height
+
+        // 1. Draw central steel bar
+        // Gray bar
+        drawRoundRect(
+            color = Color(0xFFBDBDBD),
+            topLeft = Offset(w * 0.2f, h * 0.43f),
+            size = Size(w * 0.6f, h * 0.14f),
+            cornerRadius = CornerRadius(8f, 8f)
+        )
+        // Draw steel bar highlights
+        drawRoundRect(
+            color = Color(0xFFE0E0E0),
+            topLeft = Offset(w * 0.2f, h * 0.43f),
+            size = Size(w * 0.6f, h * 0.05f),
+            cornerRadius = CornerRadius(4f, 4f)
+        )
+
+        // 2. Left Plate shadow (Duo Green Dark: #58A700)
+        drawRoundRect(
+            color = Color(0xFF58A700),
+            topLeft = Offset(w * 0.05f, h * 0.22f),
+            size = Size(w * 0.25f, h * 0.6f),
+            cornerRadius = CornerRadius(24f, 24f)
+        )
+        // Left Plate (Duo Green: #58CC02)
+        drawRoundRect(
+            color = Color(0xFF58CC02),
+            topLeft = Offset(w * 0.05f, h * 0.18f),
+            size = Size(w * 0.25f, h * 0.6f),
+            cornerRadius = CornerRadius(24f, 24f)
+        )
+
+        // 3. Right Plate shadow (Duo Green Dark: #58A700)
+        drawRoundRect(
+            color = Color(0xFF58A700),
+            topLeft = Offset(w * 0.7f, h * 0.22f),
+            size = Size(w * 0.25f, h * 0.6f),
+            cornerRadius = CornerRadius(24f, 24f)
+        )
+        // Right Plate (Duo Green: #58CC02)
+        drawRoundRect(
+            color = Color(0xFF58CC02),
+            topLeft = Offset(w * 0.7f, h * 0.18f),
+            size = Size(w * 0.25f, h * 0.6f),
+            cornerRadius = CornerRadius(24f, 24f)
+        )
+
+        // 4. Owl Eyes!
+        // Left Eye (outer white)
+        drawCircle(
+            color = Color.White,
+            radius = w * 0.09f,
+            center = Offset(w * 0.175f, h * 0.44f)
+        )
+        // Left pupil (black)
+        drawCircle(
+            color = Color(0xFF3C3C3C),
+            radius = w * 0.045f,
+            center = Offset(w * 0.175f, h * 0.44f)
+        )
+        // Left pupil highlight
+        drawCircle(
+            color = Color.White,
+            radius = w * 0.015f,
+            center = Offset(w * 0.16f, h * 0.42f)
+        )
+
+        // Right Eye (outer white)
+        drawCircle(
+            color = Color.White,
+            radius = w * 0.09f,
+            center = Offset(w * 0.825f, h * 0.44f)
+        )
+        // Right pupil (black)
+        drawCircle(
+            color = Color(0xFF3C3C3C),
+            radius = w * 0.045f,
+            center = Offset(w * 0.825f, h * 0.44f)
+        )
+        // Right pupil highlight
+        drawCircle(
+            color = Color.White,
+            radius = w * 0.015f,
+            center = Offset(w * 0.81f, h * 0.42f)
+        )
+
+        // 5. Owl Beak (Orange: #FF9600) on the central bar
+        val beakPath = Path().apply {
+            moveTo(w * 0.5f - w * 0.04f, h * 0.47f) // left
+            lineTo(w * 0.5f + w * 0.04f, h * 0.47f) // right
+            lineTo(w * 0.5f, h * 0.56f) // bottom point
+            close()
+        }
+        drawPath(
+            path = beakPath,
+            color = Color(0xFFFF9600)
+        )
+    }
+}
