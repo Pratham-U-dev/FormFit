@@ -57,6 +57,7 @@ fun DuoButton(
     textColor: Color = Color.White,
     enabled: Boolean = true,
     testTag: String = "",
+    contentPadding: PaddingValues = PaddingValues(horizontal = 24.dp, vertical = 14.dp),
     content: @Composable RowScope.() -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -104,7 +105,7 @@ fun DuoButton(
                     BorderStroke(2.dp, if (enabled) Color.Transparent else DuoBorder),
                     shape = RoundedCornerShape(14.dp)
                 )
-                .padding(horizontal = 24.dp, vertical = 14.dp),
+                .padding(contentPadding),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
             content = content

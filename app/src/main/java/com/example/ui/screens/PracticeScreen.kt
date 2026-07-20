@@ -300,7 +300,8 @@ fun PracticeScreen(
                             onClick = { cameraPermissionState.launchPermissionRequest() },
                             backgroundColor = DuoBlue,
                             shadowColor = DuoBlueDark,
-                            modifier = Modifier.height(44.dp)
+                            modifier = Modifier.height(44.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
                         ) {
                             Text("GRANT CAMERA ACCESS", color = Color.White, fontWeight = FontWeight.Bold)
                         }
@@ -321,7 +322,8 @@ fun PracticeScreen(
                 backgroundColor = Color.White,
                 shadowColor = DuoBorder,
                 textColor = DuoInkMuted,
-                modifier = Modifier.weight(0.4f).height(50.dp)
+                modifier = Modifier.weight(0.4f).height(50.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
             ) {
                 Text(
                     "ABANDON",
@@ -340,7 +342,8 @@ fun PracticeScreen(
                 backgroundColor = DuoGreen,
                 shadowColor = DuoGreenDark,
                 modifier = Modifier.weight(0.6f).height(50.dp),
-                testTag = "finish_workout_button"
+                testTag = "finish_workout_button",
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
             ) {
                 Text(
                     "FINISH WORKOUT",

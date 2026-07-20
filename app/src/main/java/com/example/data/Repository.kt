@@ -94,4 +94,9 @@ class FormFitRepository(
             )
         }
     }
+
+    suspend fun resetAllData() {
+        workoutDao.deleteAllSessions()
+        userStatsDao.deleteUserStats()
+    }
 }

@@ -409,6 +409,14 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         simulationJob?.cancel()
     }
 
+    fun resetAllData() {
+        viewModelScope.launch {
+            repository.resetAllData()
+            // Reset local leaderboard as well so it doesn't show outdated user stats
+            updateLeaderboard(0)
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         timerJob?.cancel()

@@ -43,6 +43,9 @@ interface WorkoutDao {
 
     @Query("SELECT SUM(xpEarned) FROM workout_sessions")
     fun getTotalXpFlow(): Flow<Int?>
+
+    @Query("DELETE FROM workout_sessions")
+    suspend fun deleteAllSessions()
 }
 
 @Dao
@@ -55,6 +58,9 @@ interface UserStatsDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdateStats(stats: UserStats)
+
+    @Query("DELETE FROM user_stats")
+    suspend fun deleteUserStats()
 }
 
 @Database(entities = [WorkoutSession::class, UserStats::class], version = 1, exportSchema = false)

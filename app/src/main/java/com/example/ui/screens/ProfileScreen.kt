@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.components.DuoButton
 import com.example.ui.components.DuoCard
 import com.example.ui.components.DuoProgressBar
 import com.example.ui.theme.*
@@ -210,6 +211,23 @@ fun ProfileScreen(
                     }
                 }
             }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        DuoButton(
+            onClick = { viewModel.resetAllData() },
+            modifier = Modifier.fillMaxWidth(),
+            backgroundColor = DuoRed,
+            shadowColor = DuoRedDark,
+            testTag = "reset_progress_debug_button"
+        ) {
+            Text(
+                text = "RESET PROGRESS (DEBUG)",
+                color = Color.White,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 14.sp
+            )
         }
     }
 }
