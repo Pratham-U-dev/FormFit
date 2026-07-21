@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.FlipCameraAndroid
 import androidx.compose.material.icons.filled.VideogameAsset
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -622,7 +623,9 @@ fun CameraWithPoseOverlay(
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
 
-    val previewView = remember { PreviewView(context) }
+    var lensFacing by remember { mutableIntStateOf(CameraSelector.LENS_FACING_BACK) }
+
+    val previewView = remember(context) { PreviewView(context) }
 
     // Real-time local evaluation states
     val evaluator = remember { ExerciseFormEvaluator() }
@@ -642,7 +645,8 @@ fun CameraWithPoseOverlay(
             
             // Scaler helper to translate 0..1 ML Kit coordinates to local canvas size
             fun LandmarkPoint.toOffset(): Offset {
-                return Offset(this.x * size.width, this.y * size.height)
+                val xPos = if (lensFacing == CameraSelector.LENS_FACING_FRONT) (1f - this.x) else this.x
+                return Offset(xPos * size.width, this.y * size.height)
             }
 
             // Draw bone vectors
@@ -696,8 +700,51 @@ fun CameraWithPoseOverlay(
             }
         }
 
+        // Camera Switch Button Overlay
+        IconButton(
+            onClick = {
+                lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK) {
+                    CameraSelector.LENS_FACING_FRONT
+                } else {
+                    CameraSelector.LENS_FACING_BACK
+                }
+                com.example.audio.DuoSoundPlayer.playClick()
+            },
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(12.dp)
+                .size(44.dp)
+                .background(Color.Black.copy(alpha = 0.5f), shape = CircleShape)
+                .border(2.dp, DuoBorder, shape = CircleShape)
+                .testTag("switch_camera_button")
+        ) {
+            Icon(
+                imageVector = Icons.Default.FlipCameraAndroid,
+                contentDescription = "Switch Camera",
+                tint = Color.White,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+
+        // Camera Mode Indicator Tag
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(12.dp)
+                .background(Color.Black.copy(alpha = 0.5f), shape = RoundedCornerShape(12.dp))
+                .border(1.5.dp, DuoBorder, shape = RoundedCornerShape(12.dp))
+                .padding(horizontal = 10.dp, vertical = 6.dp)
+        ) {
+            Text(
+                text = if (lensFacing == CameraSelector.LENS_FACING_FRONT) "FRONT CAM" else "BACK CAM",
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
         // Bind CameraX preview and ML Kit Analyzer
-        LaunchedEffect(exerciseType) {
+        LaunchedEffect(exerciseType, lensFacing) {
             evaluator.reset()
             val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
             cameraProviderFuture.addListener({
@@ -737,16 +784,20 @@ fun CameraWithPoseOverlay(
                     )
                 }
 
+                val cameraSelector = CameraSelector.Builder()
+                    .requireLensFacing(lensFacing)
+                    .build()
+
                 try {
                     cameraProvider.unbindAll()
                     cameraProvider.bindToLifecycle(
                         lifecycleOwner,
-                        CameraSelector.DEFAULT_BACK_CAMERA,
+                        cameraSelector,
                         preview,
                         imageAnalysis
                     )
                 } catch (e: Exception) {
-                    Log.e("CameraPoseOverlay", "Binding camera failed", e)
+                    Log.e("CameraPoseOverlay", "Binding camera failed for lens $lensFacing", e)
                 }
             }, ContextCompat.getMainExecutor(context))
         }
