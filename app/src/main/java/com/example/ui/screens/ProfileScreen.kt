@@ -332,13 +332,14 @@ fun ProfileScreen(
         DuoButton(
             onClick = { viewModel.resetAllData() },
             modifier = Modifier.fillMaxWidth(),
-            backgroundColor = DuoRed,
-            shadowColor = DuoRedDark,
+            backgroundColor = Color.White,
+            borderColor = DuoRed,
+            shadowColor = DuoBorder,
             testTag = "reset_progress_debug_button"
         ) {
             Text(
                 text = "RESET PROGRESS (DEBUG)",
-                color = Color.White,
+                color = DuoRed,
                 fontWeight = FontWeight.ExtraBold,
                 fontSize = 14.sp
             )

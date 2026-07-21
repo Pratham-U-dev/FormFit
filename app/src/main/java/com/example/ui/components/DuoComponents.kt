@@ -54,6 +54,7 @@ fun DuoButton(
     modifier: Modifier = Modifier,
     backgroundColor: Color = DuoGreen,
     shadowColor: Color = DuoGreenDark,
+    borderColor: Color = Color.Transparent,
     textColor: Color = Color.White,
     enabled: Boolean = true,
     testTag: String = "",
@@ -96,13 +97,14 @@ fun DuoButton(
         // Button body
         Row(
             modifier = Modifier
+                .fillMaxWidth()
                 .offset(y = offsetBy)
                 .background(
                     color = if (enabled) backgroundColor else DuoSurface1,
                     shape = RoundedCornerShape(14.dp)
                 )
                 .border(
-                    BorderStroke(2.dp, if (enabled) Color.Transparent else DuoBorder),
+                    BorderStroke(2.dp, if (!enabled) DuoBorder else borderColor),
                     shape = RoundedCornerShape(14.dp)
                 )
                 .padding(contentPadding),
