@@ -14,12 +14,14 @@ import kotlin.math.sin
 object DuoSoundPlayer {
     private val scope = CoroutineScope(Dispatchers.Default)
     private var appContextRef: WeakReference<Context>? = null
+    var isSoundEnabled: Boolean = true
 
     fun init(context: Context) {
         appContextRef = WeakReference(context.applicationContext)
     }
 
     private fun playRawResource(resId: Int) {
+        if (!isSoundEnabled) return
         val context = appContextRef?.get() ?: return
         scope.launch {
             try {
@@ -35,6 +37,7 @@ object DuoSoundPlayer {
     }
 
     fun playClick() {
+        if (!isSoundEnabled) return
         // Duo's classic clean/cute interface tap
         scope.launch {
             playTone(

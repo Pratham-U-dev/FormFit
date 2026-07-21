@@ -8,6 +8,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -17,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -34,6 +37,8 @@ fun ProfileScreen(
 ) {
     val stats by viewModel.userStats.collectAsState()
     val sessions by viewModel.allSessions.collectAsState()
+    val isSoundEnabled by viewModel.isSoundEnabled.collectAsState()
+    val isVirtualCoachMode by viewModel.isVirtualCoachMode.collectAsState()
     val badges = viewModel.badgesList
 
     val unlockedSet = remember(stats.unlockedBadgesCsv) {
@@ -142,7 +147,116 @@ fun ProfileScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // APP SETTINGS SECTION
+        Text(
+            text = "SETTINGS",
+            color = DuoInkMuted,
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = 13.sp,
+            letterSpacing = 1.sp,
+            modifier = Modifier.padding(top = 4.dp, bottom = 6.dp)
+        )
+
+        DuoCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 10.dp)
+        ) {
+            Column {
+                // Sound Effects Toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(if (isSoundEnabled) "🔊" else "🔇", fontSize = 20.sp)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "Sound Effects",
+                                color = DuoInk,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                            Text(
+                                text = if (isSoundEnabled) "Audio feedback ON" else "Audio feedback OFF",
+                                color = DuoInkMuted,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = isSoundEnabled,
+                        onCheckedChange = { enabled ->
+                            viewModel.setSoundEnabled(enabled)
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = DuoGreen,
+                            uncheckedThumbColor = Color.White,
+                            uncheckedTrackColor = DuoBorder
+                        ),
+                        modifier = Modifier.testTag("sound_effects_switch")
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(DuoBorder)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Virtual Coach Mode Toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("🤖", fontSize = 20.sp)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "Virtual Coach Simulation",
+                                color = DuoInk,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                            Text(
+                                text = if (isVirtualCoachMode) "Simulated workout ON" else "Camera / Sim mode",
+                                color = DuoInkMuted,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = isVirtualCoachMode,
+                        onCheckedChange = { enabled ->
+                            viewModel.setVirtualCoachMode(enabled)
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = DuoBlue,
+                            uncheckedThumbColor = Color.White,
+                            uncheckedTrackColor = DuoBorder
+                        ),
+                        modifier = Modifier.testTag("virtual_coach_switch")
+                    )
+                }
+            }
+        }
 
         // BADGES SHELF TITLE
         Text(
@@ -151,7 +265,7 @@ fun ProfileScreen(
             fontWeight = FontWeight.ExtraBold,
             fontSize = 13.sp,
             letterSpacing = 1.sp,
-            modifier = Modifier.padding(bottom = 12.dp)
+            modifier = Modifier.padding(bottom = 8.dp)
         )
 
         // BADGES SHELF GRID

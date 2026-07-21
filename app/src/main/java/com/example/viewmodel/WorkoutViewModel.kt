@@ -84,6 +84,9 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
     private val _isVirtualCoachMode = MutableStateFlow(true)
     val isVirtualCoachMode = _isVirtualCoachMode.asStateFlow()
 
+    private val _isSoundEnabled = MutableStateFlow(true)
+    val isSoundEnabled = _isSoundEnabled.asStateFlow()
+
     // Last completed session summary state (to display on summary screen)
     private val _lastCompletedSession = MutableStateFlow<WorkoutSession?>(null)
     val lastCompletedSession = _lastCompletedSession.asStateFlow()
@@ -171,6 +174,14 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         if (_isActiveSession.value) {
             // Restart practice jobs if exercise is running
             startWorkout(_currentExercise.value)
+        }
+    }
+
+    fun setSoundEnabled(enabled: Boolean) {
+        _isSoundEnabled.value = enabled
+        com.example.audio.DuoSoundPlayer.isSoundEnabled = enabled
+        if (enabled) {
+            com.example.audio.DuoSoundPlayer.playClick()
         }
     }
 
