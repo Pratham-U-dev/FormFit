@@ -7,6 +7,11 @@ import com.example.data.FormFitDatabase
 import com.example.data.FormFitRepository
 import com.example.data.UserStats
 import com.example.data.WorkoutSession
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,9 +43,85 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         application,
         FormFitDatabase::class.java,
         "formfit_database"
-    ).build()
+    ).fallbackToDestructiveMigration().build()
 
-    private val repository = FormFitRepository(database.workoutDao(), database.userStatsDao())
+    private val repository = FormFitRepository(
+        database.workoutDao(),
+        database.userStatsDao(),
+        database.nutritionDao()
+    )
+
+    private val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    val todayDateString: String = sdf.format(Date())
+
+    private val _selectedNutritionDate = MutableStateFlow(todayDateString)
+    val selectedNutritionDate = _selectedNutritionDate.asStateFlow()
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val nutritionLogsForSelectedDate: StateFlow<List<com.example.data.NutritionLog>> = _selectedNutritionDate
+        .flatMapLatest { date -> repository.getNutritionLogsForDate(date) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val totalCaloriesForSelectedDate: StateFlow<Int> = _selectedNutritionDate
+        .flatMapLatest { date -> repository.getTotalCaloriesForDate(date) }
+        .map { it ?: 0 }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0
+        )
+
+    val loggedNutritionDates: StateFlow<List<String>> = repository.loggedNutritionDates
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val currentDailyCaloriesGoal = MutableStateFlow(2000)
+
+    fun setSelectedNutritionDate(date: String) {
+        _selectedNutritionDate.value = date
+    }
+
+    fun addNutritionLog(
+        mealName: String,
+        calories: Int,
+        proteinGrams: Int = 0,
+        carbsGrams: Int = 0,
+        fatGrams: Int = 0,
+        photoPath: String? = null
+    ) {
+        viewModelScope.launch {
+            repository.insertNutritionLog(
+                com.example.data.NutritionLog(
+                    date = _selectedNutritionDate.value,
+                    mealName = mealName,
+                    calories = calories,
+                    proteinGrams = proteinGrams,
+                    carbsGrams = carbsGrams,
+                    fatGrams = fatGrams,
+                    photoPath = photoPath
+                )
+            )
+            com.example.audio.DuoSoundPlayer.playCorrect()
+        }
+    }
+
+    fun deleteNutritionLog(id: Int) {
+        viewModelScope.launch {
+            repository.deleteNutritionLog(id)
+        }
+    }
+
+    suspend fun analyzeFoodImage(bitmap: android.graphics.Bitmap): com.example.api.FoodAnalysisResult {
+        return com.example.api.GeminiFoodAnalyzer.analyzeMealImage(bitmap)
+    }
 
     val allSessions: StateFlow<List<WorkoutSession>> = repository.allSessions
         .stateIn(

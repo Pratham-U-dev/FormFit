@@ -5,9 +5,27 @@ import kotlinx.coroutines.flow.map
 
 class FormFitRepository(
     private val workoutDao: WorkoutDao,
-    private val userStatsDao: UserStatsDao
+    private val userStatsDao: UserStatsDao,
+    private val nutritionDao: NutritionDao
 ) {
     val allSessions: Flow<List<WorkoutSession>> = workoutDao.getAllSessions()
+
+    fun getNutritionLogsForDate(date: String): Flow<List<NutritionLog>> =
+        nutritionDao.getLogsForDate(date)
+
+    fun getTotalCaloriesForDate(date: String): Flow<Int?> =
+        nutritionDao.getTotalCaloriesForDate(date)
+
+    val loggedNutritionDates: Flow<List<String>> =
+        nutritionDao.getLoggedDates()
+
+    suspend fun insertNutritionLog(log: NutritionLog) {
+        nutritionDao.insertLog(log)
+    }
+
+    suspend fun deleteNutritionLog(id: Int) {
+        nutritionDao.deleteLog(id)
+    }
 
     val userStats: Flow<UserStats> = userStatsDao.getUserStats().map { stats ->
         stats ?: UserStats() // Default stats if null
@@ -98,5 +116,6 @@ class FormFitRepository(
     suspend fun resetAllData() {
         workoutDao.deleteAllSessions()
         userStatsDao.deleteUserStats()
+        nutritionDao.deleteAllNutritionLogs()
     }
 }

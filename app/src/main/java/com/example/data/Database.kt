@@ -33,6 +33,19 @@ data class UserStats(
     val unlockedBadgesCsv: String = "" // e.g. "first_workout,streak_7,perfect_squats"
 )
 
+@Entity(tableName = "nutrition_logs")
+data class NutritionLog(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val date: String, // YYYY-MM-DD
+    val mealName: String,
+    val calories: Int,
+    val proteinGrams: Int = 0,
+    val carbsGrams: Int = 0,
+    val fatGrams: Int = 0,
+    val photoPath: String? = null,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
 @Dao
 interface WorkoutDao {
     @Query("SELECT * FROM workout_sessions ORDER BY timestamp DESC")
@@ -63,8 +76,30 @@ interface UserStatsDao {
     suspend fun deleteUserStats()
 }
 
-@Database(entities = [WorkoutSession::class, UserStats::class], version = 1, exportSchema = false)
+@Dao
+interface NutritionDao {
+    @Query("SELECT * FROM nutrition_logs WHERE date = :date ORDER BY timestamp DESC")
+    fun getLogsForDate(date: String): Flow<List<NutritionLog>>
+
+    @Query("SELECT SUM(calories) FROM nutrition_logs WHERE date = :date")
+    fun getTotalCaloriesForDate(date: String): Flow<Int?>
+
+    @Query("SELECT DISTINCT date FROM nutrition_logs ORDER BY date DESC")
+    fun getLoggedDates(): Flow<List<String>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertLog(log: NutritionLog)
+
+    @Query("DELETE FROM nutrition_logs WHERE id = :id")
+    suspend fun deleteLog(id: Int)
+
+    @Query("DELETE FROM nutrition_logs")
+    suspend fun deleteAllNutritionLogs()
+}
+
+@Database(entities = [WorkoutSession::class, UserStats::class, NutritionLog::class], version = 2, exportSchema = false)
 abstract class FormFitDatabase : RoomDatabase() {
     abstract fun workoutDao(): WorkoutDao
     abstract fun userStatsDao(): UserStatsDao
+    abstract fun nutritionDao(): NutritionDao
 }

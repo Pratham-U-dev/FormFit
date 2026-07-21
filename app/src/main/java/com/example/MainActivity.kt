@@ -11,9 +11,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.Leaderboard
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Restaurant
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -28,7 +30,7 @@ import com.example.ui.theme.DuoInkMuted
 import com.example.viewmodel.WorkoutViewModel
 
 enum class MainTab {
-    COACH, LEADERBOARD, PROFILE
+    COACH, NUTRITION, LEADERBOARD, PROFILE
 }
 
 enum class ActiveScreen {
@@ -77,6 +79,26 @@ fun FormFitApp() {
                             Icon(
                                 imageVector = if (currentTab == MainTab.COACH) Icons.Default.FitnessCenter else Icons.Outlined.FitnessCenter,
                                 contentDescription = "Coach Tab",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    )
+
+                    NavigationBarItem(
+                        selected = currentTab == MainTab.NUTRITION,
+                        onClick = { currentTab = MainTab.NUTRITION },
+                        label = { Text("Nutrition") },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = DuoGreen,
+                            selectedTextColor = DuoGreen,
+                            unselectedIconColor = DuoInkMuted,
+                            unselectedTextColor = DuoInkMuted,
+                            indicatorColor = Color(0xFFE8F5E9)
+                        ),
+                        icon = {
+                            Icon(
+                                imageVector = if (currentTab == MainTab.NUTRITION) Icons.Default.Restaurant else Icons.Outlined.Restaurant,
+                                contentDescription = "Nutrition Tab",
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -135,6 +157,12 @@ fun FormFitApp() {
                                 viewModel.startWorkout(exerciseType)
                                 activeScreen = ActiveScreen.PRACTICE
                             },
+                            modifier = Modifier.padding(innerPadding)
+                        )
+                    }
+                    MainTab.NUTRITION -> {
+                        NutritionScreen(
+                            viewModel = viewModel,
                             modifier = Modifier.padding(innerPadding)
                         )
                     }
