@@ -56,6 +56,16 @@ fun FormFitApp() {
     var activeScreen by remember { mutableStateOf(ActiveScreen.TABS) }
     var currentTab by remember { mutableStateOf(MainTab.COACH) }
 
+    val needsDisplayNamePrompt by viewModel.needsDisplayNamePrompt.collectAsState()
+
+    if (needsDisplayNamePrompt) {
+        com.example.ui.components.DisplayNameDialog(
+            onConfirm = { name ->
+                viewModel.saveDisplayName(name)
+            }
+        )
+    }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {

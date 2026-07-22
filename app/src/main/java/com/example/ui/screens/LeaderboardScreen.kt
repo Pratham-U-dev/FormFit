@@ -7,6 +7,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -35,24 +37,71 @@ fun LeaderboardScreen(
             .padding(16.dp)
     ) {
         // LEADERBOARD HEADER
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "ONLINE LEADERBOARD",
+                color = DuoInk,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 20.sp
+            )
+
+            // Live Indicator Badge
+            Surface(
+                color = Color(0xFFE8F5E9),
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, DuoGreen)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("🟢", fontSize = 10.sp)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "LIVE",
+                        color = DuoGreen,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+        }
+
         Text(
-            text = "WEEKLY LEADERBOARD",
-            color = DuoInk,
-            fontWeight = FontWeight.ExtraBold,
-            fontSize = 20.sp
-        )
-        Text(
-            text = "Top form trainers. Correct reps earn max XP!",
+            text = "Top form trainers online. Complete workouts to rank up!",
             color = DuoInkMuted,
             fontSize = 13.sp,
             modifier = Modifier.padding(bottom = 16.dp)
         )
 
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            items(entries) { entry ->
+        if (entries.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = DuoGreen)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Loading Live Leaderboard...",
+                        color = DuoInkMuted,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(entries) { entry ->
                 val isRank1 = entry.rank == 1
                 val isRank2 = entry.rank == 2
                 val isRank3 = entry.rank == 3
@@ -144,4 +193,5 @@ fun LeaderboardScreen(
             }
         }
     }
+}
 }

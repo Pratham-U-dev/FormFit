@@ -180,21 +180,40 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         Badge("form_master", "Form Master", "Achieved an average form score of over 90%!", "🎓", "Avg form score >90%")
     )
 
-    // Static + dynamic Leaderboard
-    private val _leaderboard = MutableStateFlow<List<LeaderboardEntry>>(emptyList())
-    val leaderboard = _leaderboard.asStateFlow()
+    private val firebaseRepo = com.example.data.FirebaseLeaderboardRepository(application)
+
+    val needsDisplayNamePrompt: StateFlow<Boolean> = firebaseRepo.needsDisplayNamePrompt
+    val currentUserProfile: StateFlow<com.example.data.FirestoreUser?> = firebaseRepo.currentUserProfile
+
+    // Live Online Leaderboard from Firestore
+    val leaderboard: StateFlow<List<LeaderboardEntry>> = firebaseRepo.leaderboardEntries
 
     private var timerJob: Job? = null
     private var simulationJob: Job? = null
 
     init {
-        updateLeaderboard(0)
-        
         // Observe all sessions to unlock progressive badges
         viewModelScope.launch {
             allSessions.collect { sessions ->
                 evaluateComplexBadges(sessions)
             }
+        }
+    }
+
+    fun saveDisplayName(name: String) {
+        viewModelScope.launch {
+            val stats = repository.getUserStatsDirect()
+            val sessions = allSessions.value
+            val totalReps = sessions.sumOf { it.totalReps }
+            val avgScore = if (sessions.isNotEmpty()) sessions.map { it.averageScore }.average().toInt() else 0
+
+            firebaseRepo.saveDisplayName(
+                displayName = name,
+                initialStats = stats,
+                totalWorkoutSessions = sessions.size,
+                totalRepsCount = totalReps,
+                averageForm = avgScore
+            )
         }
     }
 
@@ -229,24 +248,20 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
     fun updateLeaderboard(userXpContribution: Int) {
         viewModelScope.launch {
             val stats = repository.getUserStatsDirect()
-            // Recalculate total XP including historical ones
-            val totalXp = stats.level * 350 + stats.currentXp + userXpContribution
-            
-            val baseEntries = listOf(
-                LeaderboardEntry("Duo the Owl", 1250, 1, "🦉"),
-                LeaderboardEntry("Lily (Goth)", 980, 2, "👧"),
-                LeaderboardEntry("Zari (Enthusiast)", 750, 3, "👱‍♀️"),
-                LeaderboardEntry("Your Score", totalXp, 4, "💪", isUser = true),
-                LeaderboardEntry("Vikram (Reader)", 450, 5, "🧔"),
-                LeaderboardEntry("Oscar (Artist)", 220, 6, "👨‍🎨")
-            )
+            val sessions = allSessions.value
+            val totalReps = sessions.sumOf { it.totalReps }
+            val avgScore = if (sessions.isNotEmpty()) sessions.map { it.averageScore }.average().toInt() else 0
+            val badges = stats.unlockedBadgesCsv.split(",").filter { it.isNotBlank() }
 
-            // Re-sort entries by XP
-            val sorted = baseEntries.sortedByDescending { it.xp }
-            val reRanked = sorted.mapIndexed { index, entry ->
-                entry.copy(rank = index + 1)
-            }
-            _leaderboard.value = reRanked
+            firebaseRepo.syncUserWorkoutCompleted(
+                xpEarnedInWorkout = userXpContribution,
+                totalWorkoutCount = sessions.size,
+                totalRepsCount = totalReps,
+                overallAvgFormScore = avgScore,
+                streakCount = stats.streakDays,
+                todayDateStr = todayDateString,
+                unlockedBadgesList = badges
+            )
         }
     }
 
