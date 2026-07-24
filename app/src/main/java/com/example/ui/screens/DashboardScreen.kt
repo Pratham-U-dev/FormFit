@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -25,10 +26,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.ui.components.DuoButton
 import com.example.ui.components.DuoCard
 import com.example.ui.components.DuoProgressBar
@@ -170,7 +173,7 @@ fun DashboardScreen(
                     .padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Animated Duo Mascot
+                // App Icon Logo Badge
                 Box(
                     modifier = Modifier
                         .size(72.dp)
@@ -178,9 +181,10 @@ fun DashboardScreen(
                         .border(3.dp, DuoGreenDark, shape = CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "🦉",
-                        fontSize = 42.sp
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                        contentDescription = "FormFit App Icon Logo",
+                        modifier = Modifier.size(54.dp)
                     )
                 }
 
