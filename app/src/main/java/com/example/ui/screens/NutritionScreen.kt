@@ -1,8 +1,13 @@
 package com.example.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -21,6 +26,8 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.Restaurant
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,6 +44,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.core.content.ContextCompat
 import com.example.api.FoodAnalysisResult
 import com.example.data.NutritionLog
 import com.example.ui.components.DuoButton
@@ -65,7 +73,7 @@ fun NutritionScreen(
     val loggedDates by viewModel.loggedNutritionDates.collectAsState()
     val calorieGoal by viewModel.currentDailyCaloriesGoal.collectAsState()
 
-    var showCameraSnapModal by remember { mutableStateOf(false) }
+    var showSnapOptionsModal by remember { mutableStateOf(false) }
     var showManualAddModal by remember { mutableStateOf(false) }
     var showCalendarModal by remember { mutableStateOf(false) }
 
@@ -87,7 +95,35 @@ fun NutritionScreen(
         list
     }
 
-    // Photo gallery launcher fallback
+    // Helper function to process a bitmap safely
+    fun processBitmapForAnalysis(bitmap: Bitmap) {
+        pendingCapturedBitmap = bitmap
+        try {
+            val file = File(context.cacheDir, "food_${System.currentTimeMillis()}.jpg")
+            val out = FileOutputStream(file)
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
+            out.close()
+            pendingPhotoPath = file.absolutePath
+        } catch (e: Exception) {
+            e.printStackTrace()
+            pendingPhotoPath = null
+        }
+
+        isAnalyzingFood = true
+        coroutineScope.launch {
+            try {
+                val result = viewModel.analyzeFoodImage(bitmap)
+                pendingAiResult = result
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(context, "AI Analysis failed. Please try again or add manually.", Toast.LENGTH_SHORT).show()
+            } finally {
+                isAnalyzingFood = false
+            }
+        }
+    }
+
+    // Photo gallery launcher
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -96,48 +132,70 @@ fun NutritionScreen(
                 val inputStream = context.contentResolver.openInputStream(it)
                 val bitmap = BitmapFactory.decodeStream(inputStream)
                 if (bitmap != null) {
-                    pendingCapturedBitmap = bitmap
-                    // Save bitmap locally
-                    val file = File(context.cacheDir, "food_${System.currentTimeMillis()}.jpg")
-                    val out = FileOutputStream(file)
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
-                    out.close()
-                    pendingPhotoPath = file.absolutePath
-
-                    // Run AI Analysis
-                    isAnalyzingFood = true
-                    coroutineScope.launch {
-                        val result = viewModel.analyzeFoodImage(bitmap)
-                        pendingAiResult = result
-                        isAnalyzingFood = false
-                    }
+                    processBitmapForAnalysis(bitmap)
+                } else {
+                    Toast.makeText(context, "Could not load selected image.", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                Toast.makeText(context, "Error reading image: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
-    // Camera launcher
+    fun launchGallerySafely() {
+        try {
+            galleryLauncher.launch("image/*")
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(context, "Gallery unavailable on this device.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Camera launcher with safety
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicturePreview()
     ) { bitmap: Bitmap? ->
-        bitmap?.let {
-            pendingCapturedBitmap = it
-            // Save bitmap locally
-            val file = File(context.cacheDir, "food_${System.currentTimeMillis()}.jpg")
-            val out = FileOutputStream(file)
-            it.compress(Bitmap.CompressFormat.JPEG, 85, out)
-            out.close()
-            pendingPhotoPath = file.absolutePath
+        if (bitmap != null) {
+            processBitmapForAnalysis(bitmap)
+        } else {
+            Toast.makeText(context, "No photo captured. You can choose from gallery or try sample food.", Toast.LENGTH_SHORT).show()
+        }
+    }
 
-            // Run AI Analysis
-            isAnalyzingFood = true
-            coroutineScope.launch {
-                val result = viewModel.analyzeFoodImage(it)
-                pendingAiResult = result
-                isAnalyzingFood = false
-            }
+    fun launchCameraSafely() {
+        try {
+            cameraLauncher.launch(null)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(context, "Camera intent failed. Launching Gallery instead.", Toast.LENGTH_LONG).show()
+            launchGallerySafely()
+        }
+    }
+
+    // Camera permission launcher
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            launchCameraSafely()
+        } else {
+            Toast.makeText(context, "Camera permission denied. Opening Gallery instead.", Toast.LENGTH_SHORT).show()
+            launchGallerySafely()
+        }
+    }
+
+    fun handleCameraOptionClicked() {
+        showSnapOptionsModal = false
+        val hasPermission = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (hasPermission) {
+            launchCameraSafely()
+        } else {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
 
@@ -339,7 +397,7 @@ fun NutritionScreen(
                     DuoButton(
                         onClick = {
                             com.example.audio.DuoSoundPlayer.playClick()
-                            cameraLauncher.launch(null)
+                            showSnapOptionsModal = true
                         },
                         modifier = Modifier.weight(1f).height(52.dp),
                         backgroundColor = DuoGreen,
@@ -444,6 +502,94 @@ fun NutritionScreen(
     }
 
     // --- MODALS & DIALOGS ---
+
+    // 0. Snap Options Picker Modal (Camera / Gallery / Sample)
+    if (showSnapOptionsModal) {
+        Dialog(onDismissRequest = { showSnapOptionsModal = false }) {
+            DuoCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("📸", fontSize = 22.sp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "SNAP PLATE VIA AI",
+                                color = DuoInk,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 16.sp
+                            )
+                        }
+                        IconButton(onClick = { showSnapOptionsModal = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = DuoInkMuted)
+                        }
+                    }
+
+                    Text(
+                        text = "Choose how you would like to analyze your meal:",
+                        color = DuoInkMuted,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    // Option 1: Take Camera Photo
+                    DuoButton(
+                        onClick = {
+                            com.example.audio.DuoSoundPlayer.playClick()
+                            handleCameraOptionClicked()
+                        },
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        backgroundColor = DuoGreen,
+                        shadowColor = DuoGreenDark
+                    ) {
+                        Icon(Icons.Outlined.CameraAlt, contentDescription = null, tint = Color.White)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("TAKE PHOTO (CAMERA)", color = Color.White, fontWeight = FontWeight.ExtraBold)
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Option 2: Choose from Gallery
+                    DuoButton(
+                        onClick = {
+                            com.example.audio.DuoSoundPlayer.playClick()
+                            showSnapOptionsModal = false
+                            launchGallerySafely()
+                        },
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        backgroundColor = DuoBlue,
+                        shadowColor = DuoBlueDark
+                    ) {
+                        Icon(Icons.Outlined.PhotoLibrary, contentDescription = null, tint = Color.White)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("CHOOSE FROM GALLERY", color = Color.White, fontWeight = FontWeight.ExtraBold)
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Option 3: Sample Meal Photo (AI Test)
+                    DuoButton(
+                        onClick = {
+                            com.example.audio.DuoSoundPlayer.playClick()
+                            showSnapOptionsModal = false
+                            val sampleBitmap = generateSampleFoodBitmap()
+                            processBitmapForAnalysis(sampleBitmap)
+                        },
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        backgroundColor = DuoOrange,
+                        shadowColor = Color(0xFFE08200)
+                    ) {
+                        Icon(Icons.Outlined.Restaurant, contentDescription = null, tint = Color.White)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("TRY SAMPLE MEAL (AI TEST)", color = Color.White, fontWeight = FontWeight.ExtraBold)
+                    }
+                }
+            }
+        }
+    }
 
     // 1. AI Analyzing Loading / Confirmation Modal
     if (isAnalyzingFood) {
@@ -1011,3 +1157,27 @@ private fun getDayNumLabel(dateStr: String): String {
         ""
     }
 }
+
+private fun generateSampleFoodBitmap(): Bitmap {
+    val bitmap = Bitmap.createBitmap(400, 400, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val paint = Paint()
+
+    paint.color = android.graphics.Color.rgb(240, 240, 240)
+    canvas.drawRect(0f, 0f, 400f, 400f, paint)
+
+    paint.color = android.graphics.Color.WHITE
+    canvas.drawCircle(200f, 200f, 180f, paint)
+
+    paint.color = android.graphics.Color.rgb(180, 100, 40)
+    canvas.drawRoundRect(100f, 120f, 280f, 190f, 20f, 20f, paint)
+
+    paint.color = android.graphics.Color.rgb(70, 160, 70)
+    canvas.drawCircle(140f, 260f, 50f, paint)
+
+    paint.color = android.graphics.Color.rgb(230, 210, 150)
+    canvas.drawCircle(260f, 260f, 55f, paint)
+
+    return bitmap
+}
+

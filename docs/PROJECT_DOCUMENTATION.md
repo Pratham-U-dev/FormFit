@@ -16,6 +16,7 @@ The app features a Gamified "Duolingo-style" design language with playful sound 
 
 ### 🥗 Gemini AI Nutrition & Calorie Tracker
 - **Snap Plate Vision AI**: Take or upload a photo of any food plate or meal. Gemini 2.5 Flash analyzes the image to detect meal items, total calories, protein, carbs, and fat.
+- **Multi-Source Image Capture**: Presents an interactive selection modal with options to **Take Photo with Camera**, **Choose from Gallery**, or **Try Sample Meal (AI Test)** with robust camera runtime permission checking and try-catch safety guards.
 - **Manual Log & Preset Item Calculator**: Offers direct calorie entry and pre-calculated common food items (e.g., Steak & Eggs, Chicken Breast, Rice, Avocado Toast).
 - **Daily Progress Bar**: Displays remaining calories against a daily target (2000 kcal default) with visual macro pill breakdowns (P/C/F).
 - **Interactive Date Strip & History**: Select past dates (last 30 days) to review historical meal logs and calorie totals.
