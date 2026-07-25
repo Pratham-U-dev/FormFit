@@ -31,7 +31,7 @@ The app features a Gamified "Duolingo-style" design language with playful sound 
 ### 🥇 Achievements, Streaks & Gamification
 - **XP & Level Progression**: Earn XP with every completed workout based on form accuracy and total reps.
 - **Duolingo-Inspired UI & Audio**: Custom Duolingo-styled M3 components, progress bars, and synthesized audio sound effects (`DuoSoundPlayer`).
-- **Badges & Achievements**: Dynamic achievement unlocks (e.g., *First Workout*, *Streak Master*, *Form Master*).
+- **Badges & Achievements**: Dynamic achievement unlocks (e.g., *First Workout*, *Streak Master*, *Form Master*) displayed in a fully unrolled, page-scrollable grid with the "RESET PROGRESS" button positioned cleanly after the entire achievements shelf.
 
 ---
 

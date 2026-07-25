@@ -3,11 +3,10 @@ package com.example.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -45,10 +44,14 @@ fun ProfileScreen(
         stats.unlockedBadgesCsv.split(",").filter { it.isNotEmpty() }.toSet()
     }
 
+    val badgePairs = remember(badges) { badges.chunked(2) }
+    val scrollState = rememberScrollState()
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(Color.White)
+            .verticalScroll(scrollState)
             .padding(16.dp)
     ) {
         // PROFILE HEADER
@@ -268,67 +271,77 @@ fun ProfileScreen(
             modifier = Modifier.padding(bottom = 8.dp)
         )
 
-        // BADGES SHELF GRID
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        // BADGES SHELF GRID (unrolled into rows for smooth page scrolling)
+        Column(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            items(badges) { badge ->
-                val isUnlocked = unlockedSet.contains(badge.id)
-                val cardAlpha = if (isUnlocked) 1.0f else 0.5f
-                val border = if (isUnlocked) DuoGreen else DuoBorder
-
-                DuoCard(
-                    modifier = Modifier.alpha(cardAlpha),
-                    backgroundColor = if (isUnlocked) Color.White else DuoSurface1,
-                    borderColor = border
+            badgePairs.forEach { pair ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Box(
+                    pair.forEach { badge ->
+                        val isUnlocked = unlockedSet.contains(badge.id)
+                        val cardAlpha = if (isUnlocked) 1.0f else 0.5f
+                        val border = if (isUnlocked) DuoGreen else DuoBorder
+
+                        DuoCard(
                             modifier = Modifier
-                                .size(50.dp)
-                                .background(
-                                    if (isUnlocked) Color(0xFFFFF9C4) else DuoSurface2,
-                                    shape = CircleShape
-                                ),
-                            contentAlignment = Alignment.Center
+                                .weight(1f)
+                                .alpha(cardAlpha),
+                            backgroundColor = if (isUnlocked) Color.White else DuoSurface1,
+                            borderColor = border
                         ) {
-                            Text(
-                                text = if (isUnlocked) badge.icon else "🔒",
-                                fontSize = 26.sp
-                            )
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(50.dp)
+                                        .background(
+                                            if (isUnlocked) Color(0xFFFFF9C4) else DuoSurface2,
+                                            shape = CircleShape
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (isUnlocked) badge.icon else "🔒",
+                                        fontSize = 26.sp
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text(
+                                    text = badge.title,
+                                    color = DuoInk,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 14.sp,
+                                    textAlign = TextAlign.Center
+                                )
+
+                                Text(
+                                    text = badge.description,
+                                    color = DuoInkMuted,
+                                    fontSize = 11.sp,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
                         }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = badge.title,
-                            color = DuoInk,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 14.sp,
-                            textAlign = TextAlign.Center
-                        )
-
-                        Text(
-                            text = badge.description,
-                            color = DuoInkMuted,
-                            fontSize = 11.sp,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
+                    }
+                    if (pair.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
+        // RESET PROGRESS BUTTON (Positioned cleanly after the achievements section)
         DuoButton(
             onClick = { viewModel.resetAllData() },
             modifier = Modifier.fillMaxWidth(),
@@ -344,5 +357,8 @@ fun ProfileScreen(
                 fontSize = 14.sp
             )
         }
+
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
+
