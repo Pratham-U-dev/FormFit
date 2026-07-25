@@ -79,10 +79,20 @@ fun DisplayNameDialog(
                     },
                     placeholder = { Text("e.g. Alex Trainer", color = DuoInkMuted) },
                     singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        color = DuoInk,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold
+                    ),
                     colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = DuoInk,
+                        unfocusedTextColor = DuoInk,
+                        focusedContainerColor = DuoSurface1,
+                        unfocusedContainerColor = DuoSurface1,
                         focusedBorderColor = DuoGreen,
                         unfocusedBorderColor = DuoBorder,
                         focusedLabelColor = DuoGreen,
+                        unfocusedLabelColor = DuoInkMuted,
                         cursorColor = DuoGreen
                     ),
                     shape = RoundedCornerShape(12.dp),

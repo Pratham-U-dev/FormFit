@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -57,6 +58,27 @@ import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
+
+@Composable
+private fun duoTextFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedTextColor = DuoInk,
+    unfocusedTextColor = DuoInk,
+    focusedContainerColor = DuoSurface1,
+    unfocusedContainerColor = DuoSurface1,
+    focusedBorderColor = DuoGreen,
+    unfocusedBorderColor = DuoBorder,
+    focusedLabelColor = DuoGreen,
+    unfocusedLabelColor = DuoInkMuted,
+    focusedPlaceholderColor = DuoInkMuted,
+    unfocusedPlaceholderColor = DuoInkMuted,
+    cursorColor = DuoGreen
+)
+
+private val duoTextFieldStyle = TextStyle(
+    color = DuoInk,
+    fontSize = 14.sp,
+    fontWeight = FontWeight.Bold
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -663,7 +685,9 @@ fun NutritionScreen(
                     OutlinedTextField(
                         value = editedMealName,
                         onValueChange = { editedMealName = it },
-                        label = { Text("Meal Name") },
+                        label = { Text("Meal Name", color = DuoInkMuted) },
+                        textStyle = duoTextFieldStyle,
+                        colors = duoTextFieldColors(),
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp)
                     )
@@ -674,7 +698,9 @@ fun NutritionScreen(
                         OutlinedTextField(
                             value = editedCalories,
                             onValueChange = { editedCalories = it },
-                            label = { Text("Calories") },
+                            label = { Text("Calories", color = DuoInkMuted) },
+                            textStyle = duoTextFieldStyle,
+                            colors = duoTextFieldColors(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(10.dp)
@@ -682,7 +708,9 @@ fun NutritionScreen(
                         OutlinedTextField(
                             value = editedProtein,
                             onValueChange = { editedProtein = it },
-                            label = { Text("Protein (g)") },
+                            label = { Text("Protein (g)", color = DuoInkMuted) },
+                            textStyle = duoTextFieldStyle,
+                            colors = duoTextFieldColors(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(10.dp)
@@ -695,7 +723,9 @@ fun NutritionScreen(
                         OutlinedTextField(
                             value = editedCarbs,
                             onValueChange = { editedCarbs = it },
-                            label = { Text("Carbs (g)") },
+                            label = { Text("Carbs (g)", color = DuoInkMuted) },
+                            textStyle = duoTextFieldStyle,
+                            colors = duoTextFieldColors(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(10.dp)
@@ -703,7 +733,9 @@ fun NutritionScreen(
                         OutlinedTextField(
                             value = editedFat,
                             onValueChange = { editedFat = it },
-                            label = { Text("Fat (g)") },
+                            label = { Text("Fat (g)", color = DuoInkMuted) },
+                            textStyle = duoTextFieldStyle,
+                            colors = duoTextFieldColors(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(10.dp)
@@ -813,8 +845,10 @@ fun NutritionScreen(
                         OutlinedTextField(
                             value = mealNameInput,
                             onValueChange = { mealNameInput = it },
-                            label = { Text("Meal / Food Name") },
-                            placeholder = { Text("e.g. Oatmeal & Banana") },
+                            label = { Text("Meal / Food Name", color = DuoInkMuted) },
+                            placeholder = { Text("e.g. Oatmeal & Banana", color = DuoInkMuted) },
+                            textStyle = duoTextFieldStyle,
+                            colors = duoTextFieldColors(),
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(10.dp)
                         )
@@ -824,7 +858,9 @@ fun NutritionScreen(
                         OutlinedTextField(
                             value = caloriesInput,
                             onValueChange = { caloriesInput = it },
-                            label = { Text("Total Calories (kcal)") },
+                            label = { Text("Total Calories (kcal)", color = DuoInkMuted) },
+                            textStyle = duoTextFieldStyle,
+                            colors = duoTextFieldColors(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(10.dp)
@@ -836,7 +872,9 @@ fun NutritionScreen(
                             OutlinedTextField(
                                 value = proteinInput,
                                 onValueChange = { proteinInput = it },
-                                label = { Text("Prot (g)") },
+                                label = { Text("Prot (g)", color = DuoInkMuted) },
+                                textStyle = duoTextFieldStyle,
+                                colors = duoTextFieldColors(),
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(8.dp)
@@ -844,7 +882,9 @@ fun NutritionScreen(
                             OutlinedTextField(
                                 value = carbsInput,
                                 onValueChange = { carbsInput = it },
-                                label = { Text("Carb (g)") },
+                                label = { Text("Carb (g)", color = DuoInkMuted) },
+                                textStyle = duoTextFieldStyle,
+                                colors = duoTextFieldColors(),
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(8.dp)
@@ -852,7 +892,9 @@ fun NutritionScreen(
                             OutlinedTextField(
                                 value = fatInput,
                                 onValueChange = { fatInput = it },
-                                label = { Text("Fat (g)") },
+                                label = { Text("Fat (g)", color = DuoInkMuted) },
+                                textStyle = duoTextFieldStyle,
+                                colors = duoTextFieldColors(),
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(8.dp)

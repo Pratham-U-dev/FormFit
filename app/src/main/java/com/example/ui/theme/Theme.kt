@@ -20,7 +20,7 @@ private val DarkColorScheme = darkColorScheme(
     background = Color(0xFF121212),
     surface = Color(0xFF1E1E1E),
     onBackground = White,
-    onSurface = White,
+    onSurface = DuoInk,
     error = DuoRed,
     outline = DuoBorder
 )
