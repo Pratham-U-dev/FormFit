@@ -20,7 +20,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.screens.*
 import com.example.ui.theme.FormFitTheme
@@ -77,7 +79,7 @@ fun FormFitApp() {
                     NavigationBarItem(
                         selected = currentTab == MainTab.COACH,
                         onClick = { currentTab = MainTab.COACH },
-                        label = { Text("Coach") },
+                        label = { Text("Coach", maxLines = 1, softWrap = false, fontSize = 11.sp, overflow = TextOverflow.Ellipsis) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = DuoGreen,
                             selectedTextColor = DuoGreen,
@@ -97,7 +99,7 @@ fun FormFitApp() {
                     NavigationBarItem(
                         selected = currentTab == MainTab.NUTRITION,
                         onClick = { currentTab = MainTab.NUTRITION },
-                        label = { Text("Nutrition") },
+                        label = { Text("Nutrition", maxLines = 1, softWrap = false, fontSize = 11.sp, overflow = TextOverflow.Ellipsis) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = DuoGreen,
                             selectedTextColor = DuoGreen,
@@ -117,7 +119,7 @@ fun FormFitApp() {
                     NavigationBarItem(
                         selected = currentTab == MainTab.LEADERBOARD,
                         onClick = { currentTab = MainTab.LEADERBOARD },
-                        label = { Text("Leaderboard") },
+                        label = { Text("Leaderboard", maxLines = 1, softWrap = false, fontSize = 10.5.sp, overflow = TextOverflow.Ellipsis) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = DuoGreen,
                             selectedTextColor = DuoGreen,
@@ -137,7 +139,7 @@ fun FormFitApp() {
                     NavigationBarItem(
                         selected = currentTab == MainTab.PROFILE,
                         onClick = { currentTab = MainTab.PROFILE },
-                        label = { Text("Profile") },
+                        label = { Text("Profile", maxLines = 1, softWrap = false, fontSize = 11.sp, overflow = TextOverflow.Ellipsis) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = DuoGreen,
                             selectedTextColor = DuoGreen,
