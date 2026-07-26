@@ -50,6 +50,7 @@ fun ProfileScreen(
     val isSoundEnabled by viewModel.isSoundEnabled.collectAsState()
     val isVirtualCoachMode by viewModel.isVirtualCoachMode.collectAsState()
     val aiApiKey by viewModel.aiApiKey.collectAsState()
+    val userProfile by viewModel.currentUserProfile.collectAsState()
     val badges = viewModel.badgesList
 
     var apiKeyInput by remember(aiApiKey) { mutableStateOf(aiApiKey) }
@@ -92,7 +93,7 @@ fun ProfileScreen(
 
             Column {
                 Text(
-                    text = "FormFit Athlete",
+                    text = userProfile?.displayName?.takeIf { it.isNotBlank() } ?: "FormFit Trainer",
                     color = DuoInk,
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 22.sp
