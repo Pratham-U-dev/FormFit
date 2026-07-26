@@ -168,6 +168,86 @@ fun ProfileScreen(
 
         Spacer(modifier = Modifier.height(4.dp))
 
+        // BADGES SHELF TITLE
+        Text(
+            text = "ACHIEVEMENTS SHELF",
+            color = DuoInkMuted,
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = 13.sp,
+            letterSpacing = 1.sp,
+            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+        )
+
+        // BADGES SHELF GRID (unrolled into rows for smooth page scrolling)
+        Column(
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            badgePairs.forEach { pair ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    pair.forEach { badge ->
+                        val isUnlocked = unlockedSet.contains(badge.id)
+                        val cardAlpha = if (isUnlocked) 1.0f else 0.5f
+                        val border = if (isUnlocked) DuoGreen else DuoBorder
+
+                        DuoCard(
+                            modifier = Modifier
+                                .weight(1f)
+                                .alpha(cardAlpha),
+                            backgroundColor = if (isUnlocked) Color.White else DuoSurface1,
+                            borderColor = border
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(50.dp)
+                                        .background(
+                                            if (isUnlocked) Color(0xFFFFF9C4) else DuoSurface2,
+                                            shape = CircleShape
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (isUnlocked) badge.icon else "🔒",
+                                        fontSize = 26.sp
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text(
+                                    text = badge.title,
+                                    color = DuoInk,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 14.sp,
+                                    textAlign = TextAlign.Center
+                                )
+
+                                Text(
+                                    text = badge.description,
+                                    color = DuoInkMuted,
+                                    fontSize = 11.sp,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                    if (pair.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         // APP SETTINGS SECTION
         Text(
             text = "SETTINGS",
@@ -181,7 +261,7 @@ fun ProfileScreen(
         DuoCard(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 10.dp)
+                .padding(bottom = 16.dp)
         ) {
             Column {
                 // Sound Effects Toggle
@@ -277,7 +357,7 @@ fun ProfileScreen(
             }
         }
 
-        // SMART VISION RECOGNITION KEY SECTION
+        // SMART VISION RECOGNITION KEY SECTION (POSITIONED ABOVE RESET BUTTON)
         Text(
             text = "AI VISION RECOGNITION KEY",
             color = DuoInkMuted,
@@ -467,84 +547,6 @@ fun ProfileScreen(
                             fontSize = 11.sp,
                             lineHeight = 15.sp
                         )
-                    }
-                }
-            }
-        }
-
-        // BADGES SHELF TITLE
-        Text(
-            text = "ACHIEVEMENTS SHELF",
-            color = DuoInkMuted,
-            fontWeight = FontWeight.ExtraBold,
-            fontSize = 13.sp,
-            letterSpacing = 1.sp,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
-        // BADGES SHELF GRID (unrolled into rows for smooth page scrolling)
-        Column(
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            badgePairs.forEach { pair ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    pair.forEach { badge ->
-                        val isUnlocked = unlockedSet.contains(badge.id)
-                        val cardAlpha = if (isUnlocked) 1.0f else 0.5f
-                        val border = if (isUnlocked) DuoGreen else DuoBorder
-
-                        DuoCard(
-                            modifier = Modifier
-                                .weight(1f)
-                                .alpha(cardAlpha),
-                            backgroundColor = if (isUnlocked) Color.White else DuoSurface1,
-                            borderColor = border
-                        ) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(50.dp)
-                                        .background(
-                                            if (isUnlocked) Color(0xFFFFF9C4) else DuoSurface2,
-                                            shape = CircleShape
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = if (isUnlocked) badge.icon else "🔒",
-                                        fontSize = 26.sp
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                Text(
-                                    text = badge.title,
-                                    color = DuoInk,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 14.sp,
-                                    textAlign = TextAlign.Center
-                                )
-
-                                Text(
-                                    text = badge.description,
-                                    color = DuoInkMuted,
-                                    fontSize = 11.sp,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(top = 2.dp)
-                                )
-                            }
-                        }
-                    }
-                    if (pair.size == 1) {
-                        Spacer(modifier = Modifier.weight(1f))
                     }
                 }
             }
