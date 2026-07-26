@@ -119,8 +119,20 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    private val prefs = application.getSharedPreferences("formfit_settings", android.content.Context.MODE_PRIVATE)
+
+    private val _aiApiKey = MutableStateFlow(prefs.getString("ai_vision_api_key", "") ?: "")
+    val aiApiKey = _aiApiKey.asStateFlow()
+
+    fun saveAiApiKey(key: String) {
+        val trimmed = key.trim()
+        _aiApiKey.value = trimmed
+        prefs.edit().putString("ai_vision_api_key", trimmed).apply()
+    }
+
     suspend fun analyzeFoodImage(bitmap: android.graphics.Bitmap): com.example.api.FoodAnalysisResult {
-        return com.example.api.GeminiFoodAnalyzer.analyzeMealImage(bitmap)
+        val userKey = _aiApiKey.value
+        return com.example.api.GeminiFoodAnalyzer.analyzeMealImage(bitmap, userKey)
     }
 
     val allSessions: StateFlow<List<WorkoutSession>> = repository.allSessions

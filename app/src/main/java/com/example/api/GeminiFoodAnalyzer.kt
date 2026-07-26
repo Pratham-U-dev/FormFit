@@ -19,7 +19,9 @@ data class FoodAnalysisResult(
     val proteinGrams: Int,
     val carbsGrams: Int,
     val fatGrams: Int,
-    val description: String
+    val description: String,
+    val isCloudAi: Boolean = false,
+    val analysisMethod: String = "Local Engine"
 )
 
 object GeminiFoodAnalyzer {
@@ -46,11 +48,14 @@ object GeminiFoodAnalyzer {
         return Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
     }
 
-    suspend fun analyzeMealImage(bitmap: Bitmap): FoodAnalysisResult = withContext(Dispatchers.IO) {
-        val apiKey = try {
-            BuildConfig::class.java.getField("GEMINI_API_KEY").get(null) as? String ?: ""
-        } catch (e: Exception) {
-            ""
+    suspend fun analyzeMealImage(bitmap: Bitmap, customApiKey: String? = null): FoodAnalysisResult = withContext(Dispatchers.IO) {
+        val apiKey = when {
+            !customApiKey.isNullOrBlank() -> customApiKey.trim()
+            else -> try {
+                BuildConfig::class.java.getField("GEMINI_API_KEY").get(null) as? String ?: ""
+            } catch (e: Exception) {
+                ""
+            }
         }
 
         if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
@@ -105,7 +110,7 @@ object GeminiFoodAnalyzer {
                 if (response.isSuccessful && !responseBody.isNullOrBlank()) {
                     val parsed = parseGeminiResponse(responseBody)
                     if (parsed != null) {
-                        return@withContext parsed
+                        return@withContext parsed.copy(isCloudAi = true, analysisMethod = "AI Cloud Engine")
                     }
                 } else {
                     Log.e(TAG, "Gemini API HTTP Error: ${response.code} body=$responseBody")

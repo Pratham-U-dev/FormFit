@@ -631,7 +631,7 @@ fun NutritionScreen(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Detecting food items, calories & macros with Gemini Vision",
+                        text = "Detecting food items, calories & macros with Smart AI Vision",
                         color = DuoInkMuted,
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center
@@ -656,16 +656,46 @@ fun NutritionScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "✨ AI FOOD DETECTED",
-                            color = DuoGreen,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 16.sp
-                        )
+                        Column {
+                            Text(
+                                text = "✨ AI FOOD DETECTED",
+                                color = DuoGreen,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 16.sp
+                            )
+                            // Mode Pill Indicator
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(top = 2.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .background(
+                                            if (result.isCloudAi) DuoGreen.copy(alpha = 0.15f) else DuoYellow.copy(alpha = 0.2f),
+                                            shape = RoundedCornerShape(10.dp)
+                                        )
+                                        .border(
+                                            1.dp,
+                                            if (result.isCloudAi) DuoGreen else DuoOrange,
+                                            shape = RoundedCornerShape(10.dp)
+                                        )
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = if (result.isCloudAi) "🌐 Cloud AI Engine" else "⚡ Local Vision Engine",
+                                        color = if (result.isCloudAi) DuoGreenDark else DuoInk,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
                         IconButton(onClick = { pendingAiResult = null }) {
                             Icon(Icons.Default.Close, contentDescription = "Close", tint = DuoInkMuted)
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     // Captured Photo Preview
                     pendingCapturedBitmap?.let { bitmap ->
@@ -678,8 +708,12 @@ fun NutritionScreen(
                                 .clip(RoundedCornerShape(12.dp)),
                             contentScale = ContentScale.Crop
                         )
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
                     }
+
+
+
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     // Editable Fields
                     OutlinedTextField(

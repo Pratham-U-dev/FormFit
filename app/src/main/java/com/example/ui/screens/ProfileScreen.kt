@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -7,19 +9,27 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,11 +44,17 @@ fun ProfileScreen(
     viewModel: WorkoutViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val stats by viewModel.userStats.collectAsState()
     val sessions by viewModel.allSessions.collectAsState()
     val isSoundEnabled by viewModel.isSoundEnabled.collectAsState()
     val isVirtualCoachMode by viewModel.isVirtualCoachMode.collectAsState()
+    val aiApiKey by viewModel.aiApiKey.collectAsState()
     val badges = viewModel.badgesList
+
+    var apiKeyInput by remember(aiApiKey) { mutableStateOf(aiApiKey) }
+    var showApiKey by remember { mutableStateOf(false) }
+    var isKeySavedMessage by remember { mutableStateOf(false) }
 
     val unlockedSet = remember(stats.unlockedBadgesCsv) {
         stats.unlockedBadgesCsv.split(",").filter { it.isNotEmpty() }.toSet()
@@ -257,6 +273,201 @@ fun ProfileScreen(
                         ),
                         modifier = Modifier.testTag("virtual_coach_switch")
                     )
+                }
+            }
+        }
+
+        // SMART VISION RECOGNITION KEY SECTION
+        Text(
+            text = "AI VISION RECOGNITION KEY",
+            color = DuoInkMuted,
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = 13.sp,
+            letterSpacing = 1.sp,
+            modifier = Modifier.padding(top = 4.dp, bottom = 6.dp)
+        )
+
+        DuoCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp)
+        ) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("🧠", fontSize = 22.sp)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "Smart Vision API Key",
+                                color = DuoInk,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                            Text(
+                                text = if (aiApiKey.isNotBlank()) "Cloud AI Recognition Active" else "Offline Local Vision Mode",
+                                color = if (aiApiKey.isNotBlank()) DuoGreen else DuoInkMuted,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+
+                    // Mode Badge
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                if (aiApiKey.isNotBlank()) DuoGreen.copy(alpha = 0.15f) else DuoSurface2,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .border(
+                                1.dp,
+                                if (aiApiKey.isNotBlank()) DuoGreen else DuoBorder,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = if (aiApiKey.isNotBlank()) "✨ Cloud Mode" else "⚡ Local Mode",
+                            color = if (aiApiKey.isNotBlank()) DuoGreenDark else DuoInkMuted,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = apiKeyInput,
+                    onValueChange = {
+                        apiKeyInput = it
+                        isKeySavedMessage = false
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("ai_api_key_input"),
+                    label = { Text("API Key", color = DuoInkMuted) },
+                    placeholder = { Text("Paste your API Key here...", color = DuoInkMuted) },
+                    singleLine = true,
+                    visualTransformation = if (showApiKey) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showApiKey = !showApiKey }) {
+                            Icon(
+                                imageVector = if (showApiKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = "Toggle Key Visibility",
+                                tint = DuoInkMuted
+                            )
+                        }
+                    },
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        color = DuoInk,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = DuoInk,
+                        unfocusedTextColor = DuoInk,
+                        focusedContainerColor = DuoSurface1,
+                        unfocusedContainerColor = DuoSurface1,
+                        focusedBorderColor = DuoGreen,
+                        unfocusedBorderColor = DuoBorder,
+                        focusedLabelColor = DuoGreen,
+                        unfocusedLabelColor = DuoInkMuted,
+                        cursorColor = DuoGreen
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Save Button
+                    DuoButton(
+                        onClick = {
+                            viewModel.saveAiApiKey(apiKeyInput)
+                            isKeySavedMessage = true
+                        },
+                        modifier = Modifier.weight(1f),
+                        backgroundColor = DuoGreen,
+                        borderColor = DuoGreenDark,
+                        shadowColor = DuoGreenDark,
+                        testTag = "save_ai_api_key_button"
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (isKeySavedMessage) {
+                                Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("SAVED!", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                            } else {
+                                Text("SAVE KEY", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                            }
+                        }
+                    }
+
+                    // Get Free Key Direct Link Button
+                    DuoButton(
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/app/apikey"))
+                            try {
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                // Fallback: copy to clipboard
+                                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                val clip = android.content.ClipData.newPlainText("API Key URL", "https://aistudio.google.com/app/apikey")
+                                clipboard.setPrimaryClip(clip)
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        backgroundColor = DuoSurface1,
+                        borderColor = DuoBorder,
+                        shadowColor = DuoBorder,
+                        testTag = "get_api_key_link_button"
+                    ) {
+                        Text(
+                            text = "GET KEY ↗",
+                            color = DuoInk,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Guidance Box
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(DuoBlue.copy(alpha = 0.08f), shape = RoundedCornerShape(10.dp))
+                        .border(1.dp, DuoBlue.copy(alpha = 0.3f), shape = RoundedCornerShape(10.dp))
+                        .padding(10.dp)
+                ) {
+                    Column {
+                        Text(
+                            text = "💡 How to enable Cloud AI Plate Recognition on your phone:",
+                            color = DuoInk,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "1. Click 'GET KEY ↗' to open aistudio.google.com/app/apikey\n2. Create a free API key & paste it in the box above\n3. Click SAVE KEY to activate cloud AI meal recognition!",
+                            color = DuoInkMuted,
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp
+                        )
+                    }
                 }
             }
         }
