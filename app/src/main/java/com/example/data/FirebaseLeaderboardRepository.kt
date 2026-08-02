@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit
 
 class FirebaseLeaderboardRepository(private val context: Context) {
 
-    private val TAG = "CentralLeaderboard"
+    private val TAG = "SupabaseLeaderboard"
     private val scope = CoroutineScope(Dispatchers.IO)
 
     private val prefs: SharedPreferences =
@@ -42,16 +42,20 @@ class FirebaseLeaderboardRepository(private val context: Context) {
     private val _leaderboardEntries = MutableStateFlow<List<LeaderboardEntry>>(emptyList())
     val leaderboardEntries: StateFlow<List<LeaderboardEntry>> = _leaderboardEntries.asStateFlow()
 
-    private val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(12, TimeUnit.SECONDS)
-        .readTimeout(12, TimeUnit.SECONDS)
-        .writeTimeout(12, TimeUnit.SECONDS)
-        .build()
+    private val _supabaseUrl = MutableStateFlow(prefs.getString("supabase_url", "") ?: "")
+    val supabaseUrl: StateFlow<String> = _supabaseUrl.asStateFlow()
 
-    companion object {
-        private const val MASTER_REGISTRY_ID = "ff8081819f7e10ae019f9f66fe912cfe"
-        private const val BASE_URL = "https://api.restful-api.dev/objects"
-    }
+    private val _supabaseAnonKey = MutableStateFlow(prefs.getString("supabase_anon_key", "") ?: "")
+    val supabaseAnonKey: StateFlow<String> = _supabaseAnonKey.asStateFlow()
+
+    private val _isSupabaseConnected = MutableStateFlow(false)
+    val isSupabaseConnected: StateFlow<Boolean> = _isSupabaseConnected.asStateFlow()
+
+    private val okHttpClient = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
+        .writeTimeout(10, TimeUnit.SECONDS)
+        .build()
 
     init {
         initRepository()
@@ -99,8 +103,25 @@ class FirebaseLeaderboardRepository(private val context: Context) {
                 } catch (e: Exception) {
                     Log.e(TAG, "Error in leaderboard sync loop: ${e.message}")
                 }
-                delay(10000) // refresh every 10 seconds
+                delay(8000) // Refresh every 8 seconds
             }
+        }
+    }
+
+    fun saveSupabaseConfig(url: String, anonKey: String) {
+        val cleanUrl = url.trim().trimEnd('/')
+        val cleanKey = anonKey.trim()
+
+        prefs.edit()
+            .putString("supabase_url", cleanUrl)
+            .putString("supabase_anon_key", cleanKey)
+            .apply()
+
+        _supabaseUrl.value = cleanUrl
+        _supabaseAnonKey.value = cleanKey
+
+        scope.launch {
+            syncAndFetchLeaderboard()
         }
     }
 
@@ -203,33 +224,51 @@ class FirebaseLeaderboardRepository(private val context: Context) {
             syncUserToCloudInternal(currentProfile)
         }
 
-        val registeredObjectIds = getMasterRegistryMemberIds()
+        val url = _supabaseUrl.value
+        val anonKey = _supabaseAnonKey.value
+
+        var remoteUsers: List<FirestoreUser>? = null
+
+        if (url.isNotBlank() && anonKey.isNotBlank()) {
+            remoteUsers = fetchUsersFromSupabase(url, anonKey)
+            if (remoteUsers != null) {
+                _isSupabaseConnected.value = true
+            } else {
+                _isSupabaseConnected.value = false
+            }
+        } else {
+            _isSupabaseConnected.value = false
+        }
+
         val usersList = mutableListOf<FirestoreUser>()
 
-        if (registeredObjectIds.isNotEmpty()) {
-            val queriedUsers = fetchUsersFromCloud(registeredObjectIds)
-            usersList.addAll(queriedUsers)
+        if (remoteUsers != null && remoteUsers.isNotEmpty()) {
+            usersList.addAll(remoteUsers)
+        } else {
+            // Default benchmark players when Supabase is not configured yet
+            usersList.addAll(getBenchmarkUsers())
         }
 
         val myUid = _currentUid.value
         val myProfile = _currentUserProfile.value
 
-        // Ensure current user is included if local user exists and not yet fetched
+        // Ensure current user is included if local profile exists
         if (myProfile != null && myProfile.displayName.isNotBlank()) {
-            val existsInRemote = usersList.any { it.uid == myUid || (it.displayName.equals(myProfile.displayName, ignoreCase = true)) }
-            if (!existsInRemote) {
+            val exists = usersList.any { it.uid == myUid || (it.displayName.equals(myProfile.displayName, ignoreCase = true)) }
+            if (!exists) {
                 usersList.add(myProfile)
-            }
-        }
-
-        if (usersList.isEmpty()) {
-            if (myProfile != null && myProfile.displayName.isNotBlank()) {
-                usersList.add(myProfile)
+            } else {
+                // Update local user's entry with latest stats
+                val idx = usersList.indexOfFirst { it.uid == myUid || (it.displayName.equals(myProfile.displayName, ignoreCase = true)) }
+                if (idx >= 0) {
+                    usersList[idx] = myProfile
+                }
             }
         }
 
         // Sort by XP descending
-        val sortedUsers = usersList.distinctBy { if (it.uid.isNotBlank()) it.uid else it.displayName }
+        val sortedUsers = usersList
+            .distinctBy { if (it.uid.isNotBlank()) it.uid else it.displayName }
             .sortedByDescending { it.xp }
 
         val entries = sortedUsers.mapIndexed { index, user ->
@@ -249,184 +288,102 @@ class FirebaseLeaderboardRepository(private val context: Context) {
     private fun syncUserToCloudInternal(user: FirestoreUser) {
         if (user.displayName.isBlank()) return
 
-        val cloudObjectId = prefs.getString("cloud_object_id", "") ?: ""
+        val url = _supabaseUrl.value
+        val anonKey = _supabaseAnonKey.value
 
-        val dataJson = JSONObject().apply {
-            put("uid", user.uid)
-            put("displayName", user.displayName)
-            put("level", user.level)
-            put("xp", user.xp)
-            put("workoutCount", user.workoutCount)
-            put("totalReps", user.totalReps)
-            put("averageFormScore", user.averageFormScore)
-            put("streak", user.streak)
-            put("lastWorkoutDate", user.lastWorkoutDate)
-            put("avatarIcon", user.avatarIcon)
-            put("updatedAt", System.currentTimeMillis())
-        }
-
-        val payload = JSONObject().apply {
-            put("name", "FormFitUser")
-            put("data", dataJson)
-        }
-
-        val mediaType = "application/json; charset=utf-8".toMediaType()
-
-        if (cloudObjectId.isBlank()) {
-            // POST new object
-            try {
-                val request = Request.Builder()
-                    .url(BASE_URL)
-                    .post(payload.toString().toRequestBody(mediaType))
-                    .build()
-
-                okHttpClient.newCall(request).execute().use { response ->
-                    if (response.isSuccessful) {
-                        val respStr = response.body?.string() ?: ""
-                        val respJson = JSONObject(respStr)
-                        val newId = respJson.optString("id")
-                        if (newId.isNotBlank()) {
-                            prefs.edit().putString("cloud_object_id", newId).apply()
-                            registerObjectIdInMasterRegistry(newId)
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error posting user profile to cloud: ${e.message}")
-            }
-        } else {
-            // PUT update existing object
-            try {
-                val request = Request.Builder()
-                    .url("$BASE_URL/$cloudObjectId")
-                    .put(payload.toString().toRequestBody(mediaType))
-                    .build()
-
-                okHttpClient.newCall(request).execute().use { response ->
-                    if (response.isSuccessful) {
-                        registerObjectIdInMasterRegistry(cloudObjectId)
-                    } else if (response.code == 404) {
-                        // Object expired or lost, clear ID to recreate
-                        prefs.edit().remove("cloud_object_id").apply()
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error updating user profile in cloud: ${e.message}")
-            }
+        if (url.isNotBlank() && anonKey.isNotBlank()) {
+            syncToSupabase(url, anonKey, user)
         }
     }
 
-    private fun getMasterRegistryMemberIds(): List<String> {
-        val list = mutableListOf<String>()
+    private fun syncToSupabase(baseUrl: String, anonKey: String, user: FirestoreUser) {
         try {
+            val bodyJson = JSONObject().apply {
+                put("uid", user.uid)
+                put("display_name", user.displayName)
+                put("xp", user.xp)
+                put("level", user.level)
+                put("workout_count", user.workoutCount)
+                put("total_reps", user.totalReps)
+                put("average_form_score", user.averageFormScore)
+                put("streak", user.streak)
+                put("avatar_icon", user.avatarIcon)
+            }
+
+            val mediaType = "application/json; charset=utf-8".toMediaType()
             val request = Request.Builder()
-                .url("$BASE_URL/$MASTER_REGISTRY_ID")
-                .get()
+                .url("$baseUrl/rest/v1/leaderboard")
+                .header("apikey", anonKey)
+                .header("Authorization", "Bearer $anonKey")
+                .header("Prefer", "resolution=merge-duplicates")
+                .post(bodyJson.toString().toRequestBody(mediaType))
                 .build()
 
-            okHttpClient.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    val respStr = response.body?.string() ?: ""
-                    val json = JSONObject(respStr)
-                    val dataObj = json.optJSONObject("data")
-                    val array = dataObj?.optJSONArray("memberObjectIds")
-                    if (array != null) {
-                        for (i in 0 until array.length()) {
-                            val id = array.optString(i)
-                            if (id.isNotBlank()) list.add(id)
-                        }
-                    }
-                }
-            }
+            okHttpClient.newCall(request).execute().close()
         } catch (e: Exception) {
-            Log.e(TAG, "Error reading master registry: ${e.message}")
-        }
-        return list
-    }
-
-    private fun registerObjectIdInMasterRegistry(newObjectId: String) {
-        try {
-            val currentIds = getMasterRegistryMemberIds().toMutableList()
-            if (!currentIds.contains(newObjectId)) {
-                currentIds.add(newObjectId)
-
-                val regData = JSONObject().apply {
-                    put("memberObjectIds", JSONArray(currentIds))
-                }
-                val regPayload = JSONObject().apply {
-                    put("name", "FormFitMasterRegistry")
-                    put("data", regData)
-                }
-
-                val mediaType = "application/json; charset=utf-8".toMediaType()
-                val request = Request.Builder()
-                    .url("$BASE_URL/$MASTER_REGISTRY_ID")
-                    .put(regPayload.toString().toRequestBody(mediaType))
-                    .build()
-
-                okHttpClient.newCall(request).execute().close()
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error registering object in master registry: ${e.message}")
+            Log.e(TAG, "Error syncing to Supabase: ${e.message}")
         }
     }
 
-    private fun fetchUsersFromCloud(objectIds: List<String>): List<FirestoreUser> {
+    private fun fetchUsersFromSupabase(baseUrl: String, anonKey: String): List<FirestoreUser>? {
         val result = mutableListOf<FirestoreUser>()
-        if (objectIds.isEmpty()) return result
-
         try {
-            // Query objects by IDs
-            val queryParams = objectIds.joinToString("&") { "id=$it" }
-            val url = "$BASE_URL?$queryParams"
-
             val request = Request.Builder()
-                .url(url)
+                .url("$baseUrl/rest/v1/leaderboard?select=*&order=xp.desc&limit=100")
+                .header("apikey", anonKey)
+                .header("Authorization", "Bearer $anonKey")
                 .get()
                 .build()
 
             okHttpClient.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    val respStr = response.body?.string() ?: ""
-                    val array = JSONArray(respStr)
-                    for (i in 0 until array.length()) {
-                        val item = array.getJSONObject(i)
-                        val data = item.optJSONObject("data") ?: continue
-                        val uid = data.optString("uid")
-                        val displayName = data.optString("displayName")
-                        if (displayName.isBlank()) continue
+                if (!response.isSuccessful) return null
+                val respStr = response.body?.string() ?: return null
+                val array = JSONArray(respStr)
+                for (i in 0 until array.length()) {
+                    val obj = array.getJSONObject(i)
+                    val uid = obj.optString("uid")
+                    val displayName = obj.optString("display_name")
+                    if (displayName.isBlank()) continue
 
-                        val level = data.optInt("level", 1)
-                        val xp = data.optInt("xp", 0)
-                        val workoutCount = data.optInt("workoutCount", 0)
-                        val totalReps = data.optInt("totalReps", 0)
-                        val avgForm = data.optInt("averageFormScore", 0)
-                        val streak = data.optInt("streak", 1)
-                        val lastDate = data.optString("lastWorkoutDate", "")
-                        val avatar = data.optString("avatarIcon", "💪")
+                    val xp = obj.optInt("xp", 0)
+                    val level = obj.optInt("level", 1)
+                    val workoutCount = obj.optInt("workout_count", 0)
+                    val totalReps = obj.optInt("total_reps", 0)
+                    val avgForm = obj.optInt("average_form_score", 0)
+                    val streak = obj.optInt("streak", 1)
+                    val avatar = obj.optString("avatar_icon", "💪")
 
-                        result.add(
-                            FirestoreUser(
-                                uid = uid,
-                                displayName = displayName,
-                                level = level,
-                                xp = xp,
-                                workoutCount = workoutCount,
-                                totalReps = totalReps,
-                                averageFormScore = avgForm,
-                                streak = streak,
-                                lastWorkoutDate = lastDate,
-                                avatarIcon = avatar
-                            )
+                    result.add(
+                        FirestoreUser(
+                            uid = uid,
+                            displayName = displayName,
+                            level = level,
+                            xp = xp,
+                            workoutCount = workoutCount,
+                            totalReps = totalReps,
+                            averageFormScore = avgForm,
+                            streak = streak,
+                            avatarIcon = avatar
                         )
-                    }
+                    )
                 }
+                return result
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error fetching users from cloud: ${e.message}")
+            Log.e(TAG, "Error fetching from Supabase: ${e.message}")
+            return null
         }
+    }
 
-        return result
+    private fun getBenchmarkUsers(): List<FirestoreUser> {
+        return listOf(
+            FirestoreUser("bench_1", "Alex (Apex)", 4, 1450, 28, 520, 96, 14, "", listOf(), "🦉"),
+            FirestoreUser("bench_2", "Sarah (Pro)", 3, 1120, 21, 390, 91, 8, "", listOf(), "👧"),
+            FirestoreUser("bench_3", "Devin (Beast)", 3, 850, 16, 310, 89, 6, "", listOf(), "👱‍♀️"),
+            FirestoreUser("bench_4", "Marcus (Titan)", 2, 540, 10, 180, 85, 4, "", listOf(), "🧔"),
+            FirestoreUser("bench_5", "Elena (Speed)", 1, 310, 6, 95, 82, 2, "", listOf(), "👨‍🎨")
+        )
     }
 }
+
 

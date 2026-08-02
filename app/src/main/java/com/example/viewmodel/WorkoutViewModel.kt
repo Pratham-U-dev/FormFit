@@ -197,8 +197,17 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
     val needsDisplayNamePrompt: StateFlow<Boolean> = firebaseRepo.needsDisplayNamePrompt
     val currentUserProfile: StateFlow<com.example.data.FirestoreUser?> = firebaseRepo.currentUserProfile
 
-    // Live Online Leaderboard from Firestore
+    // Live Online Leaderboard
     val leaderboard: StateFlow<List<LeaderboardEntry>> = firebaseRepo.leaderboardEntries
+
+    // Supabase Configuration
+    val supabaseUrl: StateFlow<String> = firebaseRepo.supabaseUrl
+    val supabaseAnonKey: StateFlow<String> = firebaseRepo.supabaseAnonKey
+    val isSupabaseConnected: StateFlow<Boolean> = firebaseRepo.isSupabaseConnected
+
+    fun saveSupabaseConfig(url: String, anonKey: String) {
+        firebaseRepo.saveSupabaseConfig(url, anonKey)
+    }
 
     private var timerJob: Job? = null
     private var simulationJob: Job? = null

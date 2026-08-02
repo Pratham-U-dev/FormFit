@@ -553,6 +553,284 @@ fun ProfileScreen(
             }
         }
 
+        // SUPABASE GLOBAL DATABASE SECTION
+        val supabaseUrl by viewModel.supabaseUrl.collectAsState()
+        val supabaseAnonKey by viewModel.supabaseAnonKey.collectAsState()
+        val isSupabaseConnected by viewModel.isSupabaseConnected.collectAsState()
+
+        var supabaseUrlInput by remember(supabaseUrl) { mutableStateOf(supabaseUrl) }
+        var supabaseKeyInput by remember(supabaseAnonKey) { mutableStateOf(supabaseAnonKey) }
+        var isSupabaseSavedMessage by remember { mutableStateOf(false) }
+        var showSupabaseKey by remember { mutableStateOf(false) }
+        var showSupabaseGuideDialog by remember { mutableStateOf(false) }
+
+        Text(
+            text = "SUPABASE LIVE DATABASE",
+            color = DuoInkMuted,
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = 13.sp,
+            letterSpacing = 1.sp,
+            modifier = Modifier.padding(top = 4.dp, bottom = 6.dp)
+        )
+
+        DuoCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp)
+        ) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("⚡", fontSize = 22.sp)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "Supabase DB Connection",
+                                color = DuoInk,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                            Text(
+                                text = if (isSupabaseConnected) "🟢 Connected to Cloud DB" else "🟡 Local / Demo Database",
+                                color = if (isSupabaseConnected) DuoGreen else DuoInkMuted,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+
+                    // Status Badge
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                if (isSupabaseConnected) DuoGreen.copy(alpha = 0.15f) else DuoSurface2,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .border(
+                                1.dp,
+                                if (isSupabaseConnected) DuoGreen else DuoBorder,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = if (isSupabaseConnected) "LIVE DB" else "LOCAL DB",
+                            color = if (isSupabaseConnected) DuoGreenDark else DuoInkMuted,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = supabaseUrlInput,
+                    onValueChange = {
+                        supabaseUrlInput = it
+                        isSupabaseSavedMessage = false
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("supabase_url_input"),
+                    label = { Text("Supabase Project URL", color = DuoInkMuted) },
+                    placeholder = { Text("https://xxxx.supabase.co", color = DuoInkMuted) },
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        color = DuoInk,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = DuoInk,
+                        unfocusedTextColor = DuoInk,
+                        focusedContainerColor = DuoSurface1,
+                        unfocusedContainerColor = DuoSurface1,
+                        focusedBorderColor = DuoGreen,
+                        unfocusedBorderColor = DuoBorder,
+                        focusedLabelColor = DuoGreen,
+                        unfocusedLabelColor = DuoInkMuted,
+                        cursorColor = DuoGreen
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = supabaseKeyInput,
+                    onValueChange = {
+                        supabaseKeyInput = it
+                        isSupabaseSavedMessage = false
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("supabase_anon_key_input"),
+                    label = { Text("Supabase Anon Key", color = DuoInkMuted) },
+                    placeholder = { Text("eyJhbGciOi...", color = DuoInkMuted) },
+                    singleLine = true,
+                    visualTransformation = if (showSupabaseKey) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showSupabaseKey = !showSupabaseKey }) {
+                            Icon(
+                                imageVector = if (showSupabaseKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = "Toggle Key Visibility",
+                                tint = DuoInkMuted
+                            )
+                        }
+                    },
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        color = DuoInk,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = DuoInk,
+                        unfocusedTextColor = DuoInk,
+                        focusedContainerColor = DuoSurface1,
+                        unfocusedContainerColor = DuoSurface1,
+                        focusedBorderColor = DuoGreen,
+                        unfocusedBorderColor = DuoBorder,
+                        focusedLabelColor = DuoGreen,
+                        unfocusedLabelColor = DuoInkMuted,
+                        cursorColor = DuoGreen
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Save Config Button
+                    DuoButton(
+                        onClick = {
+                            viewModel.saveSupabaseConfig(supabaseUrlInput, supabaseKeyInput)
+                            isSupabaseSavedMessage = true
+                        },
+                        modifier = Modifier.weight(1f),
+                        backgroundColor = DuoGreen,
+                        borderColor = DuoGreenDark,
+                        shadowColor = DuoGreenDark,
+                        testTag = "save_supabase_config_button"
+                    ) {
+                        Text(
+                            text = if (isSupabaseSavedMessage) "✓ CONNECTED!" else "CONNECT DB",
+                            color = Color.White,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 12.sp
+                        )
+                    }
+
+                    // Setup Guide Button
+                    DuoButton(
+                        onClick = { showSupabaseGuideDialog = true },
+                        modifier = Modifier.weight(1f),
+                        backgroundColor = DuoSurface1,
+                        borderColor = DuoBorder,
+                        shadowColor = DuoBorder,
+                        testTag = "supabase_guide_button"
+                    ) {
+                        Text(
+                            text = "📋 SETUP GUIDE",
+                            color = DuoInk,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        // Supabase Guide Dialog
+        if (showSupabaseGuideDialog) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showSupabaseGuideDialog = false },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("⚡", fontSize = 24.sp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Supabase DB Setup",
+                            color = DuoInk,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 18.sp
+                        )
+                    }
+                },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "Follow these 3 quick steps to link all phones to your free Supabase database:",
+                            color = DuoInk,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "1. Go to supabase.com & create a free project.",
+                            color = DuoInkMuted,
+                            fontSize = 11.sp
+                        )
+                        Text(
+                            text = "2. Open SQL Editor and run this query:",
+                            color = DuoInkMuted,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(DuoSurface2, shape = RoundedCornerShape(8.dp))
+                                .padding(8.dp)
+                        ) {
+                            Text(
+                                text = "create table leaderboard (\n  uid text primary key,\n  display_name text not null,\n  xp integer default 0,\n  level integer default 1,\n  workout_count integer default 0,\n  total_reps integer default 0,\n  average_form_score integer default 0,\n  streak integer default 1,\n  avatar_icon text default '💪'\n);\n\nalter table leaderboard enable row level security;\ncreate policy \"Public Select\" on leaderboard for select using (true);\ncreate policy \"Public Insert\" on leaderboard for insert with check (true);\ncreate policy \"Public Update\" on leaderboard for update using (true);",
+                                color = DuoInk,
+                                fontSize = 10.sp,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "3. Copy your Project URL & Anon Key from Settings -> API and paste them in the boxes on this page!",
+                            color = DuoInkMuted,
+                            fontSize = 11.sp
+                        )
+                    }
+                },
+                confirmButton = {
+                    DuoButton(
+                        onClick = { showSupabaseGuideDialog = false },
+                        backgroundColor = DuoGreen,
+                        borderColor = DuoGreenDark,
+                        shadowColor = DuoGreenDark
+                    ) {
+                        Text("GOT IT!", color = Color.White, fontWeight = FontWeight.ExtraBold)
+                    }
+                },
+                containerColor = Color.White,
+                shape = RoundedCornerShape(16.dp)
+            )
+        }
+
         Spacer(modifier = Modifier.height(20.dp))
 
         // RESET PROGRESS BUTTON (Positioned cleanly after the achievements section)

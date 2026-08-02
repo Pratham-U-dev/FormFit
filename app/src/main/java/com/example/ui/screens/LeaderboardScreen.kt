@@ -30,6 +30,7 @@ fun LeaderboardScreen(
     modifier: Modifier = Modifier
 ) {
     val entries by viewModel.leaderboard.collectAsState()
+    val isSupabaseConnected by viewModel.isSupabaseConnected.collectAsState()
 
     Column(
         modifier = modifier
@@ -54,21 +55,21 @@ fun LeaderboardScreen(
                 modifier = Modifier.weight(1f, fill = false)
             )
 
-            // Live Indicator Badge
+            // DB Connection Status Badge
             Surface(
-                color = Color(0xFFE8F5E9),
+                color = if (isSupabaseConnected) Color(0xFFE8F5E9) else Color(0xFFFFF8E1),
                 shape = RoundedCornerShape(12.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, DuoGreen)
+                border = androidx.compose.foundation.BorderStroke(1.dp, if (isSupabaseConnected) DuoGreen else Color(0xFFFFB300))
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("🟢", fontSize = 10.sp)
+                    Text(if (isSupabaseConnected) "⚡" else "🟡", fontSize = 10.sp)
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "LIVE",
-                        color = DuoGreen,
+                        text = if (isSupabaseConnected) "SUPABASE LIVE" else "LOCAL DEMO",
+                        color = if (isSupabaseConnected) DuoGreen else Color(0xFFFF8F00),
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 11.sp
                     )
