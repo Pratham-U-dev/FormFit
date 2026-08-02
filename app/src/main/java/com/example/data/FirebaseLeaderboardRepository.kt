@@ -42,10 +42,27 @@ class FirebaseLeaderboardRepository(private val context: Context) {
     private val _leaderboardEntries = MutableStateFlow<List<LeaderboardEntry>>(emptyList())
     val leaderboardEntries: StateFlow<List<LeaderboardEntry>> = _leaderboardEntries.asStateFlow()
 
-    private val _supabaseUrl = MutableStateFlow(prefs.getString("supabase_url", "") ?: "")
+    companion object {
+        private const val DEFAULT_SUPABASE_URL = "https://cpfccasehgdklqvpkrqf.supabase.co"
+        private const val DEFAULT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwZmNjYXNlaGdka2xxdnBrcnFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU2ODM2ODcsImV4cCI6MjEwMTI1OTY4N30.Z-1U3AaUFRdkSdT0CKxn79NyfBAfTakIrmcM5RHipN0"
+    }
+
+    private fun normalizeSupabaseUrl(url: String): String {
+        var clean = url.trim().removeSuffix("/")
+        if (clean.endsWith("/rest/v1")) {
+            clean = clean.removeSuffix("/rest/v1").removeSuffix("/")
+        }
+        return clean.ifBlank { DEFAULT_SUPABASE_URL }
+    }
+
+    private val _supabaseUrl = MutableStateFlow(
+        normalizeSupabaseUrl(prefs.getString("supabase_url", DEFAULT_SUPABASE_URL) ?: DEFAULT_SUPABASE_URL)
+    )
     val supabaseUrl: StateFlow<String> = _supabaseUrl.asStateFlow()
 
-    private val _supabaseAnonKey = MutableStateFlow(prefs.getString("supabase_anon_key", "") ?: "")
+    private val _supabaseAnonKey = MutableStateFlow(
+        prefs.getString("supabase_anon_key", DEFAULT_SUPABASE_ANON_KEY)?.ifBlank { DEFAULT_SUPABASE_ANON_KEY } ?: DEFAULT_SUPABASE_ANON_KEY
+    )
     val supabaseAnonKey: StateFlow<String> = _supabaseAnonKey.asStateFlow()
 
     private val _isSupabaseConnected = MutableStateFlow(false)
@@ -109,7 +126,7 @@ class FirebaseLeaderboardRepository(private val context: Context) {
     }
 
     fun saveSupabaseConfig(url: String, anonKey: String) {
-        val cleanUrl = url.trim().trimEnd('/')
+        val cleanUrl = normalizeSupabaseUrl(url)
         val cleanKey = anonKey.trim()
 
         prefs.edit()
@@ -297,6 +314,7 @@ class FirebaseLeaderboardRepository(private val context: Context) {
     }
 
     private fun syncToSupabase(baseUrl: String, anonKey: String, user: FirestoreUser) {
+        val cleanBaseUrl = normalizeSupabaseUrl(baseUrl)
         try {
             val bodyJson = JSONObject().apply {
                 put("uid", user.uid)
@@ -312,7 +330,7 @@ class FirebaseLeaderboardRepository(private val context: Context) {
 
             val mediaType = "application/json; charset=utf-8".toMediaType()
             val request = Request.Builder()
-                .url("$baseUrl/rest/v1/leaderboard")
+                .url("$cleanBaseUrl/rest/v1/leaderboard")
                 .header("apikey", anonKey)
                 .header("Authorization", "Bearer $anonKey")
                 .header("Prefer", "resolution=merge-duplicates")
@@ -326,10 +344,11 @@ class FirebaseLeaderboardRepository(private val context: Context) {
     }
 
     private fun fetchUsersFromSupabase(baseUrl: String, anonKey: String): List<FirestoreUser>? {
+        val cleanBaseUrl = normalizeSupabaseUrl(baseUrl)
         val result = mutableListOf<FirestoreUser>()
         try {
             val request = Request.Builder()
-                .url("$baseUrl/rest/v1/leaderboard?select=*&order=xp.desc&limit=100")
+                .url("$cleanBaseUrl/rest/v1/leaderboard?select=*&order=xp.desc&limit=100")
                 .header("apikey", anonKey)
                 .header("Authorization", "Bearer $anonKey")
                 .get()
