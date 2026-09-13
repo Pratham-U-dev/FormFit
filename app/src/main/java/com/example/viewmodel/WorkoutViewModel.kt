@@ -311,6 +311,7 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         _mistakesList.value = emptyList()
         _currentScore.value = 100
         _currentFeedback.value = when (exerciseType) {
+            "Pull-up" -> "Grip the bar with overhand grip. Hang fully extended."
             "Squat" -> "Get ready to squat! Stand straight."
             "Push-up" -> "Get into plank position. Prepare to lower."
             "Lunge" -> "Prepare to lunge. Keep hips square."
@@ -377,6 +378,7 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                         if (formScore >= 85) {
                             com.example.audio.DuoSoundPlayer.playCorrect()
                             _currentFeedback.value = when (exerciseType) {
+                                "Pull-up" -> "Chin cleared bar! Full lockout."
                                 "Squat" -> "Excellent squat depth! Perfect posture."
                                 "Push-up" -> "Perfect push-up! Keep it up."
                                 "Lunge" -> "Great alignment! Excellent balance."
@@ -385,6 +387,11 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                         } else {
                             com.example.audio.DuoSoundPlayer.playMistake()
                             val mistake = when (exerciseType) {
+                                "Pull-up" -> if (Math.random() > 0.5) {
+                                    "Chin not over bar"
+                                } else {
+                                    "Excessive body swing / kip"
+                                }
                                 "Squat" -> if (Math.random() > 0.5) {
                                     "Squat not deep enough"
                                 } else {
@@ -402,6 +409,8 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                             
                             _mistakesList.value = _mistakesList.value + mistake
                             _currentFeedback.value = when (mistake) {
+                                "Chin not over bar" -> "Pull higher! Get chin completely over the bar."
+                                "Excessive body swing / kip" -> "Keep body quiet! Avoid leg kick or swing."
                                 "Squat not deep enough" -> "Go lower! Get thighs parallel to the ground."
                                 "Knees collapsing inward" -> "Keep your knees aligned with your toes."
                                 "Push-up not deep enough" -> "Chest closer to the ground!"

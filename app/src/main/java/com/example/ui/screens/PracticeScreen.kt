@@ -520,6 +520,89 @@ fun VirtualCoachCanvas(exerciseType: String, timerSeconds: Int) {
                 drawCircle(color = DuoInk, radius = 8f, center = Offset(wristX, wristY))
                 drawCircle(color = DuoInk, radius = 8f, center = Offset(ankleX, ankleY))
             }
+            "Pull-up" -> {
+                // Pull-up Bar at the top
+                val barY = centerY - 140f
+                drawLine(
+                    color = DuoInk,
+                    start = Offset(centerX - 120f, barY),
+                    end = Offset(centerX + 120f, barY),
+                    strokeWidth = 10f
+                )
+                // Bar mounts
+                drawLine(color = DuoBorder, start = Offset(centerX - 100f, barY), end = Offset(centerX - 100f, barY - 40f), strokeWidth = 4f)
+                drawLine(color = DuoBorder, start = Offset(centerX + 100f, barY), end = Offset(centerX + 100f, barY - 40f), strokeWidth = 4f)
+
+                // Hands fixed on bar
+                val leftHandX = centerX - 55f
+                val rightHandX = centerX + 55f
+
+                // Dead hang: pulse = 0f. Chin over bar: pulse = 1f
+                val liftY = pulse * 105f
+                val headY = centerY - 35f - liftY
+                val shoulderY = centerY + 5f - liftY
+                val hipY = centerY + 85f - liftY
+
+                // Elbow flaring outward as person pulls up
+                val elbowFlopX = pulse * 28f
+                val elbowY = centerY - 55f - (liftY * 0.45f)
+
+                // Legs tucked back slightly during pull-up
+                val kneeY = centerY + 140f - liftY
+                val ankleY = centerY + 185f - liftY
+
+                // Thermal lat activation color (Green at hang -> Orange/Red at top)
+                val muscleThermalColor = if (pulse > 0.7f) DuoRed else if (pulse > 0.35f) DuoOrange else DuoGreen
+
+                // Head (rises above bar when pulse > 0.85)
+                drawCircle(color = DuoInk, radius = 22f, center = Offset(centerX, headY))
+
+                // Latissimus Dorsi & Torso Heat Mesh / Silhouette
+                drawLine(
+                    color = muscleThermalColor,
+                    start = Offset(centerX - 22f, shoulderY),
+                    end = Offset(centerX, hipY),
+                    strokeWidth = 16f
+                )
+                drawLine(
+                    color = muscleThermalColor,
+                    start = Offset(centerX + 22f, shoulderY),
+                    end = Offset(centerX, hipY),
+                    strokeWidth = 16f
+                )
+
+                // Spine
+                drawLine(
+                    color = bonePaintColor,
+                    start = Offset(centerX, shoulderY),
+                    end = Offset(centerX, hipY),
+                    strokeWidth = boneThickness
+                )
+
+                // Arms: Wrists -> Elbows -> Shoulders
+                // Left Arm
+                drawLine(color = bonePaintColor, start = Offset(leftHandX, barY), end = Offset(leftHandX - elbowFlopX, elbowY), strokeWidth = boneThickness)
+                drawLine(color = bonePaintColor, start = Offset(leftHandX - elbowFlopX, elbowY), end = Offset(centerX - 30f, shoulderY), strokeWidth = boneThickness)
+
+                // Right Arm
+                drawLine(color = bonePaintColor, start = Offset(rightHandX, barY), end = Offset(rightHandX + elbowFlopX, elbowY), strokeWidth = boneThickness)
+                drawLine(color = bonePaintColor, start = Offset(rightHandX + elbowFlopX, elbowY), end = Offset(centerX + 30f, shoulderY), strokeWidth = boneThickness)
+
+                // Legs (tucked knees)
+                drawLine(color = bonePaintColor, start = Offset(centerX - 12f, hipY), end = Offset(centerX - 15f, kneeY), strokeWidth = boneThickness)
+                drawLine(color = bonePaintColor, start = Offset(centerX - 15f, kneeY), end = Offset(centerX - 10f, ankleY), strokeWidth = boneThickness)
+                drawLine(color = bonePaintColor, start = Offset(centerX + 12f, hipY), end = Offset(centerX + 15f, kneeY), strokeWidth = boneThickness)
+                drawLine(color = bonePaintColor, start = Offset(centerX + 15f, kneeY), end = Offset(centerX + 10f, ankleY), strokeWidth = boneThickness)
+
+                // Joint Dots
+                drawCircle(color = DuoInk, radius = 8f, center = Offset(leftHandX, barY))
+                drawCircle(color = DuoInk, radius = 8f, center = Offset(rightHandX, barY))
+                drawCircle(color = DuoOrange, radius = 8f, center = Offset(leftHandX - elbowFlopX, elbowY))
+                drawCircle(color = DuoOrange, radius = 8f, center = Offset(rightHandX + elbowFlopX, elbowY))
+                drawCircle(color = DuoYellow, radius = 8f, center = Offset(centerX - 30f, shoulderY))
+                drawCircle(color = DuoYellow, radius = 8f, center = Offset(centerX + 30f, shoulderY))
+                drawCircle(color = DuoYellow, radius = 8f, center = Offset(centerX, hipY))
+            }
             "Lunge" -> {
                 // Standing: pulse = 0f. Flexed lunge depth: pulse = 1f
                 val headY = centerY - 140f + (pulse * 70f)
@@ -771,6 +854,7 @@ fun CameraWithPoseOverlay(
                             currentSkeleton = skeleton
                             if (skeleton != null) {
                                 val result = when (exerciseType) {
+                                    "Pull-up" -> evaluator.evaluatePullup(skeleton)
                                     "Squat" -> evaluator.evaluateSquat(skeleton)
                                     "Push-up" -> evaluator.evaluatePushup(skeleton)
                                     "Lunge" -> evaluator.evaluateLunge(skeleton)

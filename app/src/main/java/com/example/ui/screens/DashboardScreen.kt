@@ -250,9 +250,9 @@ fun DashboardScreen(
 
         // WORKOUT MODULES
         val exercises = listOf(
+            Triple("Pull-up", "Pull-up Biomechanics", "🧗"),
             Triple("Squat", "Squat Training", "🏋️‍♂️"),
             Triple("Push-up", "Push-up Core", "💪"),
-            Triple("Lunge", "Lunge Balance", "🏃"),
             Triple("Plank", "Plank Endurance", "🧘")
         )
 
@@ -286,9 +286,9 @@ fun DashboardScreen(
                                 )
                                 Text(
                                     text = when(type) {
+                                        "Pull-up" -> "Track chin clearance, elbow lockout, and lat fatigue."
                                         "Squat" -> "Perfect your lower body squat depth."
                                         "Push-up" -> "Build standard chest and elbow posture."
-                                        "Lunge" -> "Master leg symmetry and knee line."
                                         else -> "Hold horizontal spine alignment."
                                     },
                                     color = DuoInkMuted,
@@ -303,7 +303,7 @@ fun DashboardScreen(
                             shadowColor = DuoBlueDark,
                             modifier = Modifier.width(90.dp).height(44.dp),
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                            testTag = "start_button_${type.lowercase()}"
+                            testTag = "start_button_${type.lowercase().replace("-", "")}"
                         ) {
                             Text(
                                 "START",

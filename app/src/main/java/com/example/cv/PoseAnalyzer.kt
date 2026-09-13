@@ -51,6 +51,12 @@ class ExerciseFormEvaluator {
     private var minLungeAngle = 180.0
     private var lungeDeepEnough = false
 
+    // Pull-up state machine trackers
+    private var pullupState = "HANG" // HANG, PULL, TOP, LOWER
+    private var minPullupElbowAngle = 180.0
+    private var pullupChinCleared = false
+    private var pullupLockoutAtBottom = true
+
     fun reset() {
         squatState = "UP"
         minSquatAngle = 180.0
@@ -63,6 +69,11 @@ class ExerciseFormEvaluator {
         lungeState = "UP"
         minLungeAngle = 180.0
         lungeDeepEnough = false
+
+        pullupState = "HANG"
+        minPullupElbowAngle = 180.0
+        pullupChinCleared = false
+        pullupLockoutAtBottom = true
     }
 
     fun evaluateSquat(skeleton: PoseSkeleton): EvaluationResult {
@@ -292,6 +303,130 @@ class ExerciseFormEvaluator {
             feedback = feedback,
             isRepCompleted = false,
             angleValue = hipAngle
+        )
+    }
+
+    fun evaluatePullup(skeleton: PoseSkeleton): EvaluationResult {
+        val shoulder = skeleton.shoulderLeft ?: skeleton.shoulderRight ?: return EvaluationResult.idle("Position shoulders in frame")
+        val elbow = skeleton.elbowLeft ?: skeleton.elbowRight ?: return EvaluationResult.idle("Position elbows in frame")
+        val wrist = skeleton.wristLeft ?: skeleton.wristRight ?: return EvaluationResult.idle("Hands must grip the bar")
+
+        val leftElbowAngle = if (skeleton.shoulderLeft != null && skeleton.elbowLeft != null && skeleton.wristLeft != null) {
+            PoseGeometry.calculateAngle(skeleton.shoulderLeft, skeleton.elbowLeft, skeleton.wristLeft)
+        } else null
+
+        val rightElbowAngle = if (skeleton.shoulderRight != null && skeleton.elbowRight != null && skeleton.wristRight != null) {
+            PoseGeometry.calculateAngle(skeleton.shoulderRight, skeleton.elbowRight, skeleton.wristRight)
+        } else null
+
+        val avgElbowAngle = when {
+            leftElbowAngle != null && rightElbowAngle != null -> (leftElbowAngle + rightElbowAngle) / 2.0
+            leftElbowAngle != null -> leftElbowAngle
+            rightElbowAngle != null -> rightElbowAngle
+            else -> PoseGeometry.calculateAngle(shoulder, elbow, wrist)
+        }
+
+        var feedback = "Dead hang... pull chin over bar!"
+        var mistake: String? = null
+        var isRepCompleted = false
+        var score = 100
+
+        if (avgElbowAngle < minPullupElbowAngle) {
+            minPullupElbowAngle = avgElbowAngle
+        }
+
+        // Check if chin reached bar level (elbow angle < 85° or shoulders near wrist height)
+        val avgWristY = if (skeleton.wristLeft != null && skeleton.wristRight != null) {
+            (skeleton.wristLeft.y + skeleton.wristRight.y) / 2f
+        } else wrist.y
+        val avgShoulderY = if (skeleton.shoulderLeft != null && skeleton.shoulderRight != null) {
+            (skeleton.shoulderLeft.y + skeleton.shoulderRight.y) / 2f
+        } else shoulder.y
+
+        // When shoulders rise within close proximity to wrists, chin is over bar
+        val chinClearedThreshold = (avgShoulderY - avgWristY) < 0.18f || avgElbowAngle <= 80.0
+        if (chinClearedThreshold) {
+            pullupChinCleared = true
+        }
+
+        // Arm asymmetry check
+        if (leftElbowAngle != null && rightElbowAngle != null) {
+            val asym = abs(leftElbowAngle - rightElbowAngle)
+            if (asym > 25.0) {
+                mistake = "Uneven pull (arm asymmetry)"
+                feedback = "Pull evenly with both arms!"
+                score = 65
+            }
+        }
+
+        // Excessive swing / kipping check using horizontal hip displacement vs shoulder
+        val hip = skeleton.hipLeft ?: skeleton.hipRight
+        if (hip != null) {
+            val horizontalSway = abs(hip.x - shoulder.x)
+            if (horizontalSway > 0.14f) {
+                mistake = "Excessive body swing / kip"
+                feedback = "Strict pull-up: avoid swinging legs!"
+                score = 60
+            }
+        }
+
+        when (pullupState) {
+            "HANG" -> {
+                // User starts pulling up when elbows flex below 145°
+                if (avgElbowAngle < 145.0) {
+                    pullupState = "PULL"
+                    minPullupElbowAngle = avgElbowAngle
+                    pullupChinCleared = false
+                    pullupLockoutAtBottom = true
+                    feedback = "Pulling up! Drive elbows down."
+                } else {
+                    feedback = "Hanging from bar. Ready to pull!"
+                }
+            }
+            "PULL" -> {
+                if (avgElbowAngle < 85.0 || pullupChinCleared) {
+                    pullupState = "TOP"
+                    feedback = "Chin over bar! Hold briefly."
+                } else {
+                    feedback = "Drive higher! Get chin over the bar."
+                }
+            }
+            "TOP" -> {
+                // Lowering down
+                if (avgElbowAngle > 100.0) {
+                    pullupState = "LOWER"
+                    feedback = "Controlled descent... full extension."
+                } else {
+                    feedback = "Chin cleared! Now lower smoothly."
+                }
+            }
+            "LOWER" -> {
+                // Bottom lockout check: elbows must reach >= 150°
+                if (avgElbowAngle >= 150.0) {
+                    pullupState = "HANG"
+                    isRepCompleted = true
+
+                    if (!pullupChinCleared && minPullupElbowAngle > 88.0) {
+                        mistake = "Chin not over bar"
+                        feedback = "Pull higher! Chin must clear the bar."
+                        score = 70
+                    } else {
+                        feedback = "Full lockout & chin cleared! Excellent rep."
+                        score = if (mistake != null) 72 else 98
+                    }
+                    minPullupElbowAngle = 180.0
+                } else {
+                    feedback = "Lower all the way to full dead hang lockout."
+                }
+            }
+        }
+
+        return EvaluationResult(
+            score = score,
+            mistake = mistake,
+            feedback = feedback,
+            isRepCompleted = isRepCompleted,
+            angleValue = avgElbowAngle
         )
     }
 }
