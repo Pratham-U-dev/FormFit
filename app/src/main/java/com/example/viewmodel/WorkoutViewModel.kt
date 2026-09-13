@@ -20,6 +20,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.example.cv.PullUpBiomechanics
+import com.example.cv.PullUpMetrics
+import com.example.cv.PoseSkeleton
 
 data class LeaderboardEntry(
     val name: String,
@@ -179,6 +182,11 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
 
     private val _isSoundEnabled = MutableStateFlow(true)
     val isSoundEnabled = _isSoundEnabled.asStateFlow()
+    
+    // Pull-up biomechanics
+    private val pullUpBiomechanics = PullUpBiomechanics()
+    private val _pullUpMetrics = MutableStateFlow(PullUpMetrics())
+    val pullUpMetrics = _pullUpMetrics.asStateFlow()
 
     // Last completed session summary state (to display on summary screen)
     private val _lastCompletedSession = MutableStateFlow<WorkoutSession?>(null)
@@ -450,25 +458,43 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         score: Int,
         mistake: String?,
         feedback: String,
-        isRepCompleted: Boolean
+        isRepCompleted: Boolean,
+        skeleton: PoseSkeleton? = null
     ) {
         _currentScore.value = score
         _currentFeedback.value = feedback
+        
+        if (skeleton != null && _currentExercise.value == "Pull-up") {
+            val metrics = pullUpBiomechanics.processFrame(skeleton)
+            _pullUpMetrics.value = metrics
+            
+            // Sync with old rep counter to avoid breaking gamification logic
+            if (metrics.repCount > _repCount.value) {
+                val repScore = if (metrics.lastRep?.chinVerdict == "CHIN ABOVE BAR") 100 
+                               else if (metrics.lastRep?.chinVerdict == "~ CHIN AT BAR") 85 
+                               else 60
+                
+                _repScores.value = _repScores.value + repScore
+                if (repScore >= 85) com.example.audio.DuoSoundPlayer.playCorrect()
+                else com.example.audio.DuoSoundPlayer.playMistake()
+            }
+            _repCount.value = metrics.repCount
+        } else {
+            if (isRepCompleted) {
+                _repCount.value += 1
+                _repScores.value = _repScores.value + score
+                if (score >= 85) {
+                    com.example.audio.DuoSoundPlayer.playCorrect()
+                } else {
+                    com.example.audio.DuoSoundPlayer.playMistake()
+                }
+            }
+        }
         
         if (mistake != null && Math.random() > 0.7) { // limit spam
             val previousSize = _mistakesList.value.size
             _mistakesList.value = _mistakesList.value + mistake
             if (_mistakesList.value.size > previousSize) {
-                com.example.audio.DuoSoundPlayer.playMistake()
-            }
-        }
-
-        if (isRepCompleted) {
-            _repCount.value += 1
-            _repScores.value = _repScores.value + score
-            if (score >= 85) {
-                com.example.audio.DuoSoundPlayer.playCorrect()
-            } else {
                 com.example.audio.DuoSoundPlayer.playMistake()
             }
         }

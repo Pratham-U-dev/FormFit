@@ -74,6 +74,7 @@ fun PracticeScreen(
     val formScore by viewModel.currentScore.collectAsState()
     val isVirtual by viewModel.isVirtualCoachMode.collectAsState()
     val mistakes by viewModel.mistakesList.collectAsState()
+    val pullUpMetrics by viewModel.pullUpMetrics.collectAsState()
 
     val cameraPermissionState = rememberPermissionState(permission = Manifest.permission.CAMERA)
 
@@ -268,16 +269,22 @@ fun PracticeScreen(
         ) {
             if (isVirtual) {
                 // RENDER ANIMATED COACH CANVAS
-                VirtualCoachCanvas(exerciseType = exerciseType, timerSeconds = timerSeconds)
+                VirtualCoachCanvas(exerciseType = exerciseType, timerSeconds = timerSeconds, pullUpMetrics = pullUpMetrics)
             } else {
                 // RENDER CAMERAX PREVIEW OR PERMISSION REQUEST
                 if (cameraPermissionState.status.isGranted) {
-                    CameraWithPoseOverlay(
-                        exerciseType = exerciseType,
-                        onFrameAnalysis = { score, mistake, fb, rep ->
-                            viewModel.processCameraFrameAnalysis(score, mistake, fb, rep)
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        CameraWithPoseOverlay(
+                            exerciseType = exerciseType,
+                            pullUpMetrics = pullUpMetrics,
+                            onFrameAnalysis = { score, mistake, fb, rep, skeleton ->
+                                viewModel.processCameraFrameAnalysis(score, mistake, fb, rep, skeleton)
+                            }
+                        )
+                        if (exerciseType == "Pull-up") {
+                            PullUpDashboardHUD(pullUpMetrics)
                         }
-                    )
+                    }
                 } else {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -360,7 +367,11 @@ fun PracticeScreen(
 }
 
 @Composable
-fun VirtualCoachCanvas(exerciseType: String, timerSeconds: Int) {
+fun VirtualCoachCanvas(
+    exerciseType: String,
+    timerSeconds: Int,
+    pullUpMetrics: com.example.cv.PullUpMetrics? = null
+) {
     // We animate a value between 0f and 1f representing mechanical squat extension/flexion
     var pulse by remember { mutableStateOf(0f) }
     var ascending by remember { mutableStateOf(false) }
@@ -551,25 +562,22 @@ fun VirtualCoachCanvas(exerciseType: String, timerSeconds: Int) {
                 val kneeY = centerY + 140f - liftY
                 val ankleY = centerY + 185f - liftY
 
-                // Thermal lat activation color (Green at hang -> Orange/Red at top)
-                val muscleThermalColor = if (pulse > 0.7f) DuoRed else if (pulse > 0.35f) DuoOrange else DuoGreen
+                // Thermal lat activation color mapping based on live model (or fallback for virtual)
+                val latEffort = pullUpMetrics?.latsEffort ?: (0.3 + pulse * 0.5)
+                val muscleThermalColor = if (latEffort > 0.8) DuoRed else if (latEffort > 0.5) DuoOrange else if (latEffort > 0.2) DuoYellow else DuoBlue
 
                 // Head (rises above bar when pulse > 0.85)
                 drawCircle(color = DuoInk, radius = 22f, center = Offset(centerX, headY))
 
-                // Latissimus Dorsi & Torso Heat Mesh / Silhouette
-                drawLine(
-                    color = muscleThermalColor,
-                    start = Offset(centerX - 22f, shoulderY),
-                    end = Offset(centerX, hipY),
-                    strokeWidth = 16f
-                )
-                drawLine(
-                    color = muscleThermalColor,
-                    start = Offset(centerX + 22f, shoulderY),
-                    end = Offset(centerX, hipY),
-                    strokeWidth = 16f
-                )
+                // Latissimus Dorsi Polygon Mesh
+                val latPath = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(centerX - 35f, shoulderY)
+                    lineTo(centerX + 35f, shoulderY)
+                    lineTo(centerX + 25f, hipY)
+                    lineTo(centerX - 25f, hipY)
+                    close()
+                }
+                drawPath(path = latPath, color = muscleThermalColor.copy(alpha = 0.85f))
 
                 // Spine
                 drawLine(
@@ -696,11 +704,76 @@ fun VirtualCoachCanvas(exerciseType: String, timerSeconds: Int) {
     }
 }
 
+@Composable
+fun PullUpDashboardHUD(metrics: com.example.cv.PullUpMetrics) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        // TOP HUD
+        Column {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text("${metrics.repCount}", fontSize = 64.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                Text(" REPS", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(bottom = 12.dp, start = 8.dp))
+            }
+            
+            Box(modifier = Modifier
+                .background(if (metrics.phase == "HOLD") DuoOrange else if (metrics.phase == "PULL") DuoGreen else DuoInk, RoundedCornerShape(8.dp))
+                .padding(horizontal = 8.dp, vertical = 4.dp)) {
+                Text(metrics.phase, color = Color.White, fontWeight = FontWeight.Bold)
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("${metrics.chinAtBarCount}/${metrics.repCount} CHIN AT THE BAR", color = Color.White, fontSize = 12.sp)
+            Text("${metrics.speedLossPct} % SPEED VS REP 1", color = Color.White, fontSize = 12.sp)
+            Text("${metrics.peakPowerW} W PEAK POWER", color = Color.White, fontSize = 12.sp)
+            Text(String.format("+%.2f °C LATS · MODELLED", metrics.latsTempRise), color = Color.White, fontSize = 12.sp)
+            Text("${metrics.latsFatiguedPct} % · ${metrics.bicepsFatiguedPct} % LATS · BICEPS FATIGUED, MODEL", color = Color.White, fontSize = 12.sp)
+            Text(String.format("≈ %.1f kcal / %.1f kJ OF HEAT", metrics.totalKcal, metrics.totalHeatKj), color = Color.White, fontSize = 12.sp)
+        }
+        
+        // BOTTOM HUD
+        if (metrics.lastRep != null) {
+            val rep = metrics.lastRep
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0x99000000), RoundedCornerShape(12.dp))
+                    .padding(12.dp)
+            ) {
+                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    Column {
+                        Text("REP ${rep.repNum}", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (rep.fullLockout) Box(modifier = Modifier.background(DuoGreen, RoundedCornerShape(4.dp)).padding(4.dp)) { Text("FULL LOCK-OUT", color = Color.White, fontSize = 10.sp) }
+                            if (rep.swayCm < 10) Box(modifier = Modifier.background(DuoGreen, RoundedCornerShape(4.dp)).padding(4.dp)) { Text("NO SWING", color = Color.White, fontSize = 10.sp) }
+                        }
+                        Text(String.format("up %.1f s hold %.1f s down %.1f s", rep.durationConcentric, rep.durationHold, rep.durationEccentric), color = Color.White, fontSize = 12.sp)
+                        Text(String.format("peak %.2f m/s %d W ≈ %.1f kcal", rep.peakVelocity, rep.peakPower.toInt(), rep.energyKcal), color = Color.White, fontSize = 12.sp)
+                        Text(String.format("speed loss %d %% sway %.0f cm", rep.speedLossPct, rep.swayCm), color = Color.White, fontSize = 12.sp)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .background(if (rep.chinVerdict.contains("ABOVE")) DuoGreen else if (rep.chinVerdict.contains("AT")) DuoOrange else DuoRed, RoundedCornerShape(8.dp))
+                            .padding(12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(rep.chinVerdict, color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                    }
+                }
+            }
+        }
+    }
+}
+
 @SuppressLint("UnrememberedMutableState")
 @Composable
 fun CameraWithPoseOverlay(
     exerciseType: String,
-    onFrameAnalysis: (Int, String?, String, Boolean) -> Unit
+    pullUpMetrics: com.example.cv.PullUpMetrics? = null,
+    onFrameAnalysis: (Int, String?, String, Boolean, PoseSkeleton?) -> Unit
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -744,17 +817,63 @@ fun CameraWithPoseOverlay(
                 }
             }
 
-            // Body outlines
-            drawBone(skeleton.shoulderLeft, skeleton.shoulderRight)
-            drawBone(skeleton.shoulderLeft, skeleton.hipLeft)
-            drawBone(skeleton.shoulderRight, skeleton.hipRight)
-            drawBone(skeleton.hipLeft, skeleton.hipRight)
+            // Draw Bone Vectors depending on exercise
+            if (exerciseType == "Pull-up") {
+                // Pull-up specific heatmap and geometry drawing
+                val effortColor = fun(effort: Double): Color {
+                    return if (effort > 0.8) DuoRed else if (effort > 0.6) DuoOrange else if (effort > 0.3) DuoYellow else if (effort > 0.1) DuoGreen else DuoBlue.copy(alpha = 0.5f)
+                }
 
-            // Arms
-            drawBone(skeleton.shoulderLeft, skeleton.elbowLeft)
-            drawBone(skeleton.elbowLeft, skeleton.wristLeft)
-            drawBone(skeleton.shoulderRight, skeleton.elbowRight)
-            drawBone(skeleton.elbowRight, skeleton.wristRight)
+                // Draw Lats Polygon
+                if (skeleton.shoulderLeft != null && skeleton.shoulderRight != null && skeleton.hipLeft != null && skeleton.hipRight != null) {
+                    val latColor = effortColor(pullUpMetrics?.latsEffort ?: 0.0)
+                    val latPath = androidx.compose.ui.graphics.Path().apply {
+                        moveTo(skeleton.shoulderLeft.toOffset().x, skeleton.shoulderLeft.toOffset().y)
+                        lineTo(skeleton.shoulderRight.toOffset().x, skeleton.shoulderRight.toOffset().y)
+                        lineTo(skeleton.hipRight.toOffset().x, skeleton.hipRight.toOffset().y)
+                        lineTo(skeleton.hipLeft.toOffset().x, skeleton.hipLeft.toOffset().y)
+                        close()
+                    }
+                    drawPath(path = latPath, color = latColor.copy(alpha = 0.8f))
+                }
+                
+                // Draw normal skeleton on top
+                drawBone(skeleton.shoulderLeft, skeleton.shoulderRight)
+                drawBone(skeleton.shoulderLeft, skeleton.hipLeft)
+                drawBone(skeleton.shoulderRight, skeleton.hipRight)
+                drawBone(skeleton.hipLeft, skeleton.hipRight)
+                
+                // Biceps Heatmap
+                val bicepColor = effortColor(pullUpMetrics?.bicepsEffort ?: 0.0)
+                if (skeleton.shoulderLeft != null && skeleton.elbowLeft != null) {
+                    drawLine(color = bicepColor.copy(alpha = 0.8f), start = skeleton.shoulderLeft.toOffset(), end = skeleton.elbowLeft.toOffset(), strokeWidth = 35f)
+                }
+                if (skeleton.shoulderRight != null && skeleton.elbowRight != null) {
+                    drawLine(color = bicepColor.copy(alpha = 0.8f), start = skeleton.shoulderRight.toOffset(), end = skeleton.elbowRight.toOffset(), strokeWidth = 35f)
+                }
+                
+                // Forearms Heatmap
+                val forearmColor = effortColor(pullUpMetrics?.forearmsEffort ?: 0.0)
+                if (skeleton.elbowLeft != null && skeleton.wristLeft != null) {
+                    drawLine(color = forearmColor.copy(alpha = 0.8f), start = skeleton.elbowLeft.toOffset(), end = skeleton.wristLeft.toOffset(), strokeWidth = 25f)
+                }
+                if (skeleton.elbowRight != null && skeleton.wristRight != null) {
+                    drawLine(color = forearmColor.copy(alpha = 0.8f), start = skeleton.elbowRight.toOffset(), end = skeleton.wristRight.toOffset(), strokeWidth = 25f)
+                }
+                
+            } else {
+                // Default Body outlines
+                drawBone(skeleton.shoulderLeft, skeleton.shoulderRight)
+                drawBone(skeleton.shoulderLeft, skeleton.hipLeft)
+                drawBone(skeleton.shoulderRight, skeleton.hipRight)
+                drawBone(skeleton.hipLeft, skeleton.hipRight)
+    
+                // Arms
+                drawBone(skeleton.shoulderLeft, skeleton.elbowLeft)
+                drawBone(skeleton.elbowLeft, skeleton.wristLeft)
+                drawBone(skeleton.shoulderRight, skeleton.elbowRight)
+                drawBone(skeleton.elbowRight, skeleton.wristRight)
+            }
 
             // Legs
             drawBone(skeleton.hipLeft, skeleton.kneeLeft)
@@ -862,7 +981,7 @@ fun CameraWithPoseOverlay(
                                     else -> EvaluationResult.idle("Active")
                                 }
                                 currentResult = result
-                                onFrameAnalysis(result.score, result.mistake, result.feedback, result.isRepCompleted)
+                                onFrameAnalysis(result.score, result.mistake, result.feedback, result.isRepCompleted, skeleton)
                             }
                         }
                     )
