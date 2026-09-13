@@ -18,6 +18,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -72,138 +75,87 @@ fun DashboardScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // User Level & XP Progress
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // Left: Logo
+                Image(
+                    painter = painterResource(id = R.drawable.kettling_logo),
+                    contentDescription = "Logo",
+                    modifier = Modifier.size(48.dp)
+                )
+
+                // Right: Pills and Avatar
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Streak Pill
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .background(Color(0xFFFFF2E0), shape = RoundedCornerShape(16.dp))
+                            .border(1.5.dp, Color(0xFFFFE0B2), shape = RoundedCornerShape(16.dp))
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(text = "🔥", fontSize = 14.sp)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "${stats.streakDays}",
+                            color = DuoOrange,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 13.sp
+                        )
+                    }
+
+                    // Gems Pill
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .background(Color(0xFFF5F3FF), shape = RoundedCornerShape(16.dp))
+                            .border(1.5.dp, Color(0xFFEDE9FE), shape = RoundedCornerShape(16.dp))
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(text = "💎", fontSize = 14.sp)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "${stats.currentXp}",
+                            color = Color(0xFF8B5CF6),
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 13.sp
+                        )
+                    }
+
+                    // Hearts Pill
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .background(Color(0xFFFEF2F2), shape = RoundedCornerShape(16.dp))
+                            .border(1.5.dp, Color(0xFFFEE2E2), shape = RoundedCornerShape(16.dp))
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(text = "❤️", fontSize = 14.sp)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "5/5",
+                            color = Color(0xFFEF4444),
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 13.sp
+                        )
+                    }
+
+                    // Profile Avatar (Placeholder)
                     Box(
                         modifier = Modifier
-                            .size(38.dp)
-                            .background(DuoYellow, shape = CircleShape)
-                            .border(2.dp, Color(0xFFDCAE00), shape = CircleShape),
+                            .size(36.dp)
+                            .background(Color(0xFFE2E8F0), shape = CircleShape)
+                            .border(1.5.dp, Color(0xFFCBD5E1), shape = CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "${stats.level}",
-                            color = DuoInk,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 18.sp
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Profile",
+                            tint = Color.Gray,
+                            modifier = Modifier.size(24.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column {
-                        val neededXp = stats.level * 100
-                        val progress = if (neededXp > 0) stats.currentXp.toFloat() / neededXp else 0f
-                        Text(
-                            text = "Level ${stats.level} Coach",
-                            color = DuoInk,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
-                        )
-                        DuoProgressBar(
-                            progress = progress,
-                            fillColor = DuoYellow,
-                            modifier = Modifier.width(120.dp).height(10.dp)
-                        )
-                    }
-                }
-
-                // Daily Streak Badge
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .background(Color(0xFFFFF2E0), shape = RoundedCornerShape(12.dp))
-                        .border(2.dp, Color(0xFFFFE0B2), shape = RoundedCornerShape(12.dp))
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = "🔥",
-                        fontSize = 18.sp
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "${stats.streakDays} Day Streak",
-                        color = DuoOrange,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 13.sp
-                    )
-                }
-            }
-        }
-
-        // HERO BANNER WITH THEMED DUMBBELL LOGO
-        item {
-            DuoCard(
-                modifier = Modifier.fillMaxWidth(),
-                backgroundColor = Color(0xFFF1F8E9),
-                borderColor = DuoGreen
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "DUO'S IRON TEMPLE",
-                            color = DuoGreen,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 11.sp,
-                            letterSpacing = 1.sp
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Lift with perfect form to keep Duo happy and earn double XP!",
-                            color = DuoInk,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 14.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    com.example.ui.components.DuoDumbbellLogo(
-                        modifier = Modifier.size(72.dp)
-                    )
-                }
-            }
-        }
-
-        // DUO THE OWL SPEECH BUBBLE
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // App Icon Logo Badge
-                Box(
-                    modifier = Modifier
-                        .size(72.dp)
-                        .background(DuoGreen, shape = CircleShape)
-                        .border(3.dp, DuoGreenDark, shape = CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                        contentDescription = "FormFit App Icon Logo",
-                        modifier = Modifier.size(54.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                // Speech Bubble
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .background(DuoSurface1, shape = RoundedCornerShape(18.dp))
-                        .border(2.dp, DuoBorder, shape = RoundedCornerShape(18.dp))
-                        .padding(14.dp)
-                ) {
-                    Text(
-                        text = "Hey there, Champ! Practice makes perfect. Choose an exercise below and let's polish your form!",
-                        color = DuoInk,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
-                    )
                 }
             }
         }

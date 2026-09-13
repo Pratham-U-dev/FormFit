@@ -16,6 +16,12 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
+import com.example.R
+
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -69,12 +75,12 @@ fun PracticeScreen(
 ) {
     val exerciseType by viewModel.currentExercise.collectAsState()
     val repCount by viewModel.repCount.collectAsState()
+    val pullUpMetrics by viewModel.pullUpMetrics.collectAsState()
     val timerSeconds by viewModel.sessionSeconds.collectAsState()
     val feedback by viewModel.currentFeedback.collectAsState()
     val formScore by viewModel.currentScore.collectAsState()
     val isVirtual by viewModel.isVirtualCoachMode.collectAsState()
     val mistakes by viewModel.mistakesList.collectAsState()
-    val pullUpMetrics by viewModel.pullUpMetrics.collectAsState()
 
     val cameraPermissionState = rememberPermissionState(permission = Manifest.permission.CAMERA)
 
@@ -155,108 +161,6 @@ fun PracticeScreen(
             }
         }
 
-        // WORKOUT STATS ROW
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            // Reps Badges
-            DuoCard(
-                modifier = Modifier.weight(1f).padding(end = 8.dp),
-                backgroundColor = DuoSurface1
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = if (exerciseType == "Plank") "HOLD TIME" else "REPETITIONS",
-                        color = DuoInkMuted,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Text(
-                        text = if (exerciseType == "Plank") "${repCount}s" else "$repCount",
-                        color = DuoYellow,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-            }
-
-            // Timer Badge
-            DuoCard(
-                modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
-                backgroundColor = DuoSurface1
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "DURATION",
-                        color = DuoInkMuted,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    val minutes = timerSeconds / 60
-                    val seconds = timerSeconds % 60
-                    Text(
-                        text = String.format("%02d:%02d", minutes, seconds),
-                        color = DuoBlue,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-            }
-
-            // Live Score Gauge
-            DuoCard(
-                modifier = Modifier.weight(1f).padding(start = 8.dp),
-                backgroundColor = if (formScore < 80) Color(0xFFFFEBEE) else DuoSurface1,
-                borderColor = if (formScore < 80) DuoRed else DuoBorder
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "FORM SCORE",
-                        color = if (formScore < 80) DuoRed else DuoInkMuted,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Text(
-                        text = "$formScore%",
-                        color = if (formScore < 80) DuoRed else DuoGreen,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-            }
-        }
-
-        // CENTRAL FEEDBACK SPEECH BUBBLE
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    if (formScore < 80) Color(0xFFFFEBEE) else Color(0xFFE8F5E9),
-                    shape = RoundedCornerShape(16.dp)
-                )
-                .border(
-                    2.dp,
-                    if (formScore < 80) DuoRed else DuoGreen,
-                    shape = RoundedCornerShape(16.dp)
-                )
-                .padding(12.dp)
-                .padding(bottom = 4.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = feedback,
-                color = if (formScore < 80) DuoRed else DuoInk,
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                textAlign = TextAlign.Center
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
         // VIEWPORT (CAMERA OR SIMULATOR)
         Box(
             modifier = Modifier
@@ -268,21 +172,41 @@ fun PracticeScreen(
             contentAlignment = Alignment.Center
         ) {
             if (isVirtual) {
-                // RENDER ANIMATED COACH CANVAS
-                VirtualCoachCanvas(exerciseType = exerciseType, timerSeconds = timerSeconds, pullUpMetrics = pullUpMetrics)
+                // RENDER EXERCISE INFO SCREEN
+                ExerciseInfoView(exerciseType = exerciseType, repCount = repCount)
             } else {
                 // RENDER CAMERAX PREVIEW OR PERMISSION REQUEST
                 if (cameraPermissionState.status.isGranted) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         CameraWithPoseOverlay(
                             exerciseType = exerciseType,
-                            pullUpMetrics = pullUpMetrics,
                             onFrameAnalysis = { score, mistake, fb, rep, skeleton ->
                                 viewModel.processCameraFrameAnalysis(score, mistake, fb, rep, skeleton)
                             }
                         )
                         if (exerciseType == "Pull-up") {
                             PullUpDashboardHUD(pullUpMetrics)
+                        } else {
+                            // Live In-Camera Overlay for Reps and Feedback
+                            Column(modifier = Modifier.align(Alignment.TopStart).padding(16.dp)) {
+                            Box(modifier = Modifier.background(DuoSurface1, RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 6.dp)) {
+                                Text(
+                                    text = if (exerciseType == "Plank") "HOLD: ${repCount}s" else "REPS: $repCount",
+                                    color = DuoYellow,
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Box(modifier = Modifier.background(if (formScore < 80) Color(0xFFFFEBEE) else Color(0xFFE8F5E9), RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 6.dp)) {
+                                Text(
+                                    text = feedback,
+                                    color = if (formScore < 80) DuoRed else DuoGreen,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
                         }
                     }
                 } else {
@@ -366,404 +290,114 @@ fun PracticeScreen(
     }
 }
 
-@Composable
-fun VirtualCoachCanvas(
-    exerciseType: String,
-    timerSeconds: Int,
-    pullUpMetrics: com.example.cv.PullUpMetrics? = null
-) {
-    // We animate a value between 0f and 1f representing mechanical squat extension/flexion
-    var pulse by remember { mutableStateOf(0f) }
-    var ascending by remember { mutableStateOf(false) }
 
-    LaunchedEffect(timerSeconds) {
-        // Continuous updates mimicking exercise pacing
-        while (true) {
-            delay(50)
-            if (ascending) {
-                pulse -= 0.04f
-                if (pulse <= 0f) {
-                    pulse = 0f
-                    ascending = false
-                }
-            } else {
-                pulse += 0.04f
-                if (pulse >= 1f) {
-                    pulse = 1f
-                    ascending = true
-                }
-            }
-        }
-    }
-
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        val centerX = size.width / 2f
-        val centerY = size.height / 2f
-
-        // Draw ambient floor grid
-        drawLine(
-            color = DuoBorder,
-            start = Offset(centerX - 120f, centerY + 220f),
-            end = Offset(centerX + 120f, centerY + 220f),
-            strokeWidth = 6f
-        )
-
-        val bonePaintColor = DuoBlue
-        val boneThickness = 14f
-
-        when (exerciseType) {
-            "Squat" -> {
-                // Standing: pulse = 0f. Deep squat: pulse = 1f
-                val headY = centerY - 140f + (pulse * 80f)
-                val hipY = centerY + 10f + (pulse * 95f)
-                val kneeY = centerY + 110f + (pulse * 40f)
-                val ankleY = centerY + 200f
-                val kneeXOffset = pulse * 35f
-
-                // Head
-                drawCircle(color = DuoInk, radius = 24f, center = Offset(centerX, headY - 40f))
-
-                // Spine (Shoulder to Hip)
-                drawLine(
-                    color = bonePaintColor,
-                    start = Offset(centerX, headY),
-                    end = Offset(centerX, hipY),
-                    strokeWidth = boneThickness
-                )
-
-                // Left Leg (Hip -> Knee -> Ankle)
-                drawLine(
-                    color = bonePaintColor,
-                    start = Offset(centerX, hipY),
-                    end = Offset(centerX - 35f - kneeXOffset, kneeY),
-                    strokeWidth = boneThickness
-                )
-                drawLine(
-                    color = bonePaintColor,
-                    start = Offset(centerX - 35f - kneeXOffset, kneeY),
-                    end = Offset(centerX - 40f, ankleY),
-                    strokeWidth = boneThickness
-                )
-
-                // Right Leg
-                drawLine(
-                    color = bonePaintColor,
-                    start = Offset(centerX, hipY),
-                    end = Offset(centerX + 35f + kneeXOffset, kneeY),
-                    strokeWidth = boneThickness
-                )
-                drawLine(
-                    color = bonePaintColor,
-                    start = Offset(centerX + 35f + kneeXOffset, kneeY),
-                    end = Offset(centerX + 40f, ankleY),
-                    strokeWidth = boneThickness
-                )
-
-                // Arms (extended forward in squats)
-                drawLine(
-                    color = bonePaintColor,
-                    start = Offset(centerX, headY + 10f),
-                    end = Offset(centerX - 60f, headY + 20f),
-                    strokeWidth = boneThickness
-                )
-
-                // Overlay joints as dots
-                drawCircle(color = DuoYellow, radius = 8f, center = Offset(centerX, headY))
-                drawCircle(color = DuoYellow, radius = 8f, center = Offset(centerX, hipY))
-                drawCircle(color = DuoOrange, radius = 8f, center = Offset(centerX - 35f - kneeXOffset, kneeY))
-                drawCircle(color = DuoOrange, radius = 8f, center = Offset(centerX + 35f + kneeXOffset, kneeY))
-                drawCircle(color = DuoInk, radius = 8f, center = Offset(centerX - 40f, ankleY))
-                drawCircle(color = DuoInk, radius = 8f, center = Offset(centerX + 40f, ankleY))
-            }
-            "Push-up" -> {
-                // Rotated figure representing Plank/Pushup mechanics
-                // High plank: pulse = 0f. Chest down: pulse = 1f
-                val dipOffset = pulse * 50f
-                val shoulderX = centerX - 100f
-                val shoulderY = centerY + 40f - dipOffset
-                val hipX = centerX + 10f
-                val hipY = centerY + 40f - (dipOffset * 0.5f)
-                val ankleX = centerX + 120f
-                val ankleY = centerY + 60f
-
-                val elbowX = centerX - 80f - (pulse * 30f)
-                val elbowY = centerY + 90f
-                val wristX = centerX - 100f
-                val wristY = centerY + 130f
-
-                // Head
-                drawCircle(color = DuoInk, radius = 22f, center = Offset(shoulderX - 35f, shoulderY - 15f))
-
-                // Spine (Shoulder to Hip)
-                drawLine(
-                    color = bonePaintColor,
-                    start = Offset(shoulderX, shoulderY),
-                    end = Offset(hipX, hipY),
-                    strokeWidth = boneThickness
-                )
-
-                // Hips to Ankles
-                drawLine(
-                    color = bonePaintColor,
-                    start = Offset(hipX, hipY),
-                    end = Offset(ankleX, ankleY),
-                    strokeWidth = boneThickness
-                )
-
-                // Arm (Shoulder -> Elbow -> Wrist/Floor)
-                drawLine(
-                    color = bonePaintColor,
-                    start = Offset(shoulderX, shoulderY),
-                    end = Offset(elbowX, elbowY),
-                    strokeWidth = boneThickness
-                )
-                drawLine(
-                    color = bonePaintColor,
-                    start = Offset(elbowX, elbowY),
-                    end = Offset(wristX, wristY),
-                    strokeWidth = boneThickness
-                )
-
-                // Joints
-                drawCircle(color = DuoYellow, radius = 8f, center = Offset(shoulderX, shoulderY))
-                drawCircle(color = DuoYellow, radius = 8f, center = Offset(hipX, hipY))
-                drawCircle(color = DuoOrange, radius = 8f, center = Offset(elbowX, elbowY))
-                drawCircle(color = DuoInk, radius = 8f, center = Offset(wristX, wristY))
-                drawCircle(color = DuoInk, radius = 8f, center = Offset(ankleX, ankleY))
-            }
-            "Pull-up" -> {
-                // Pull-up Bar at the top
-                val barY = centerY - 140f
-                drawLine(
-                    color = DuoInk,
-                    start = Offset(centerX - 120f, barY),
-                    end = Offset(centerX + 120f, barY),
-                    strokeWidth = 10f
-                )
-                // Bar mounts
-                drawLine(color = DuoBorder, start = Offset(centerX - 100f, barY), end = Offset(centerX - 100f, barY - 40f), strokeWidth = 4f)
-                drawLine(color = DuoBorder, start = Offset(centerX + 100f, barY), end = Offset(centerX + 100f, barY - 40f), strokeWidth = 4f)
-
-                // Hands fixed on bar
-                val leftHandX = centerX - 55f
-                val rightHandX = centerX + 55f
-
-                // Dead hang: pulse = 0f. Chin over bar: pulse = 1f
-                val liftY = pulse * 105f
-                val headY = centerY - 35f - liftY
-                val shoulderY = centerY + 5f - liftY
-                val hipY = centerY + 85f - liftY
-
-                // Elbow flaring outward as person pulls up
-                val elbowFlopX = pulse * 28f
-                val elbowY = centerY - 55f - (liftY * 0.45f)
-
-                // Legs tucked back slightly during pull-up
-                val kneeY = centerY + 140f - liftY
-                val ankleY = centerY + 185f - liftY
-
-                // Thermal lat activation color mapping based on live model (or fallback for virtual)
-                val latEffort = pullUpMetrics?.latsEffort ?: (0.3 + pulse * 0.5)
-                val muscleThermalColor = if (latEffort > 0.8) DuoRed else if (latEffort > 0.5) DuoOrange else if (latEffort > 0.2) DuoYellow else DuoBlue
-
-                // Head (rises above bar when pulse > 0.85)
-                drawCircle(color = DuoInk, radius = 22f, center = Offset(centerX, headY))
-
-                // Latissimus Dorsi Polygon Mesh
-                val latPath = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(centerX - 35f, shoulderY)
-                    lineTo(centerX + 35f, shoulderY)
-                    lineTo(centerX + 25f, hipY)
-                    lineTo(centerX - 25f, hipY)
-                    close()
-                }
-                drawPath(path = latPath, color = muscleThermalColor.copy(alpha = 0.85f))
-
-                // Spine
-                drawLine(
-                    color = bonePaintColor,
-                    start = Offset(centerX, shoulderY),
-                    end = Offset(centerX, hipY),
-                    strokeWidth = boneThickness
-                )
-
-                // Arms: Wrists -> Elbows -> Shoulders
-                // Left Arm
-                drawLine(color = bonePaintColor, start = Offset(leftHandX, barY), end = Offset(leftHandX - elbowFlopX, elbowY), strokeWidth = boneThickness)
-                drawLine(color = bonePaintColor, start = Offset(leftHandX - elbowFlopX, elbowY), end = Offset(centerX - 30f, shoulderY), strokeWidth = boneThickness)
-
-                // Right Arm
-                drawLine(color = bonePaintColor, start = Offset(rightHandX, barY), end = Offset(rightHandX + elbowFlopX, elbowY), strokeWidth = boneThickness)
-                drawLine(color = bonePaintColor, start = Offset(rightHandX + elbowFlopX, elbowY), end = Offset(centerX + 30f, shoulderY), strokeWidth = boneThickness)
-
-                // Legs (tucked knees)
-                drawLine(color = bonePaintColor, start = Offset(centerX - 12f, hipY), end = Offset(centerX - 15f, kneeY), strokeWidth = boneThickness)
-                drawLine(color = bonePaintColor, start = Offset(centerX - 15f, kneeY), end = Offset(centerX - 10f, ankleY), strokeWidth = boneThickness)
-                drawLine(color = bonePaintColor, start = Offset(centerX + 12f, hipY), end = Offset(centerX + 15f, kneeY), strokeWidth = boneThickness)
-                drawLine(color = bonePaintColor, start = Offset(centerX + 15f, kneeY), end = Offset(centerX + 10f, ankleY), strokeWidth = boneThickness)
-
-                // Joint Dots
-                drawCircle(color = DuoInk, radius = 8f, center = Offset(leftHandX, barY))
-                drawCircle(color = DuoInk, radius = 8f, center = Offset(rightHandX, barY))
-                drawCircle(color = DuoOrange, radius = 8f, center = Offset(leftHandX - elbowFlopX, elbowY))
-                drawCircle(color = DuoOrange, radius = 8f, center = Offset(rightHandX + elbowFlopX, elbowY))
-                drawCircle(color = DuoYellow, radius = 8f, center = Offset(centerX - 30f, shoulderY))
-                drawCircle(color = DuoYellow, radius = 8f, center = Offset(centerX + 30f, shoulderY))
-                drawCircle(color = DuoYellow, radius = 8f, center = Offset(centerX, hipY))
-            }
-            "Lunge" -> {
-                // Standing: pulse = 0f. Flexed lunge depth: pulse = 1f
-                val headY = centerY - 140f + (pulse * 70f)
-                val hipY = centerY + 10f + (pulse * 80f)
-                
-                // Front Leg (Steps forward - Left)
-                val frontKneeX = centerX - 60f
-                val frontKneeY = centerY + 100f + (pulse * 10f)
-                val frontAnkleX = centerX - 60f
-                val frontAnkleY = centerY + 200f
-
-                // Back Leg (Stays backward - Right)
-                val backKneeX = centerX + 40f + (pulse * 10f)
-                val backKneeY = centerY + 100f + (pulse * 70f)
-                val backAnkleX = centerX + 80f
-                val backAnkleY = centerY + 200f
-
-                // Head
-                drawCircle(color = DuoInk, radius = 24f, center = Offset(centerX, headY - 40f))
-
-                // Spine
-                drawLine(
-                    color = bonePaintColor,
-                    start = Offset(centerX, headY),
-                    end = Offset(centerX, hipY),
-                    strokeWidth = boneThickness
-                )
-
-                // Front Leg
-                drawLine(
-                    color = bonePaintColor,
-                    start = Offset(centerX, hipY),
-                    end = Offset(frontKneeX, frontKneeY),
-                    strokeWidth = boneThickness
-                )
-                drawLine(
-                    color = bonePaintColor,
-                    start = Offset(frontKneeX, frontKneeY),
-                    end = Offset(frontAnkleX, frontAnkleY),
-                    strokeWidth = boneThickness
-                )
-
-                // Back Leg
-                drawLine(
-                    color = bonePaintColor,
-                    start = Offset(centerX, hipY),
-                    end = Offset(backKneeX, backKneeY),
-                    strokeWidth = boneThickness
-                )
-                drawLine(
-                    color = bonePaintColor,
-                    start = Offset(backKneeX, backKneeY),
-                    end = Offset(backAnkleX, backAnkleY),
-                    strokeWidth = boneThickness
-                )
-
-                // Draw Joint Highlights
-                drawCircle(color = DuoYellow, radius = 8f, center = Offset(centerX, hipY))
-                drawCircle(color = DuoOrange, radius = 8f, center = Offset(frontKneeX, frontKneeY))
-                drawCircle(color = DuoOrange, radius = 8f, center = Offset(backKneeX, backKneeY))
-                drawCircle(color = DuoInk, radius = 8f, center = Offset(frontAnkleX, frontAnkleY))
-                drawCircle(color = DuoInk, radius = 8f, center = Offset(backAnkleX, backAnkleY))
-            }
-            "Plank" -> {
-                // Static body plank alignment with minor core vibration
-                val wobble = sin(timerSeconds * 2.5f) * 4f
-                val shoulderX = centerX - 100f
-                val shoulderY = centerY + 50f
-                val hipX = centerX + 10f
-                val hipY = centerY + 50f + wobble
-                val ankleX = centerX + 120f
-                val ankleY = centerY + 65f
-
-                val wristX = centerX - 100f
-                val wristY = centerY + 130f
-
-                // Head
-                drawCircle(color = DuoInk, radius = 22f, center = Offset(shoulderX - 35f, shoulderY - 15f))
-
-                // Bone lines
-                drawLine(color = bonePaintColor, start = Offset(shoulderX, shoulderY), end = Offset(hipX, hipY), strokeWidth = boneThickness)
-                drawLine(color = bonePaintColor, start = Offset(hipX, hipY), end = Offset(ankleX, ankleY), strokeWidth = boneThickness)
-                drawLine(color = bonePaintColor, start = Offset(shoulderX, shoulderY), end = Offset(wristX, wristY), strokeWidth = boneThickness)
-
-                // Highlight Spine Line
-                drawCircle(color = DuoYellow, radius = 8f, center = Offset(shoulderX, shoulderY))
-                drawCircle(color = DuoOrange, radius = 8f, center = Offset(hipX, hipY))
-                drawCircle(color = DuoInk, radius = 8f, center = Offset(ankleX, ankleY))
-            }
-        }
-    }
-}
 
 @Composable
-fun PullUpDashboardHUD(metrics: com.example.cv.PullUpMetrics) {
+fun ExerciseInfoView(exerciseType: String, repCount: Int) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(Color.White)
             .padding(16.dp),
-        verticalArrangement = Arrangement.SpaceBetween
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // TOP HUD
-        Column {
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text("${metrics.repCount}", fontSize = 64.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                Text(" REPS", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(bottom = 12.dp, start = 8.dp))
-            }
-            
-            Box(modifier = Modifier
-                .background(if (metrics.phase == "HOLD") DuoOrange else if (metrics.phase == "PULL") DuoGreen else DuoInk, RoundedCornerShape(8.dp))
-                .padding(horizontal = 8.dp, vertical = 4.dp)) {
-                Text(metrics.phase, color = Color.White, fontWeight = FontWeight.Bold)
-            }
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("${metrics.chinAtBarCount}/${metrics.repCount} CHIN AT THE BAR", color = Color.White, fontSize = 12.sp)
-            Text("${metrics.speedLossPct} % SPEED VS REP 1", color = Color.White, fontSize = 12.sp)
-            Text("${metrics.peakPowerW} W PEAK POWER", color = Color.White, fontSize = 12.sp)
-            Text(String.format("+%.2f °C LATS · MODELLED", metrics.latsTempRise), color = Color.White, fontSize = 12.sp)
-            Text("${metrics.latsFatiguedPct} % · ${metrics.bicepsFatiguedPct} % LATS · BICEPS FATIGUED, MODEL", color = Color.White, fontSize = 12.sp)
-            Text(String.format("≈ %.1f kcal / %.1f kJ OF HEAT", metrics.totalKcal, metrics.totalHeatKj), color = Color.White, fontSize = 12.sp)
+        // Title
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = exerciseType.uppercase(),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = DuoInk
+            )
+            Text(
+                text = "Replace",
+                color = DuoBlue,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
         
-        // BOTTOM HUD
-        if (metrics.lastRep != null) {
-            val rep = metrics.lastRep
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0x99000000), RoundedCornerShape(12.dp))
-                    .padding(12.dp)
-            ) {
-                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                    Column {
-                        Text("REP ${rep.repNum}", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            if (rep.fullLockout) Box(modifier = Modifier.background(DuoGreen, RoundedCornerShape(4.dp)).padding(4.dp)) { Text("FULL LOCK-OUT", color = Color.White, fontSize = 10.sp) }
-                            if (rep.swayCm < 10) Box(modifier = Modifier.background(DuoGreen, RoundedCornerShape(4.dp)).padding(4.dp)) { Text("NO SWING", color = Color.White, fontSize = 10.sp) }
-                        }
-                        Text(String.format("up %.1f s hold %.1f s down %.1f s", rep.durationConcentric, rep.durationHold, rep.durationEccentric), color = Color.White, fontSize = 12.sp)
-                        Text(String.format("peak %.2f m/s %d W ≈ %.1f kcal", rep.peakVelocity, rep.peakPower.toInt(), rep.energyKcal), color = Color.White, fontSize = 12.sp)
-                        Text(String.format("speed loss %d %% sway %.0f cm", rep.speedLossPct, rep.swayCm), color = Color.White, fontSize = 12.sp)
-                    }
-                    Box(
-                        modifier = Modifier
-                            .background(if (rep.chinVerdict.contains("ABOVE")) DuoGreen else if (rep.chinVerdict.contains("AT")) DuoOrange else DuoRed, RoundedCornerShape(8.dp))
-                            .padding(12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(rep.chinVerdict, color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                    }
-                }
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Illustration
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp)
+                .background(Color(0xFFF5F9FF), RoundedCornerShape(16.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.pullup_illustration_1789326142612), // Placeholder generated image
+                contentDescription = "Exercise Illustration",
+                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)),
+                contentScale = ContentScale.Crop
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Toggles
+        Row(
+            modifier = Modifier
+                .background(Color(0xFFF1F3F5), RoundedCornerShape(20.dp))
+                .padding(4.dp)
+        ) {
+            Box(modifier = Modifier.background(DuoBlue, RoundedCornerShape(16.dp)).padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Text("Animation", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
             }
+            Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Text("Muscle", color = DuoInkMuted, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            }
+            Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Text("How to do", color = DuoInkMuted, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        // Repeats
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "REPEATS",
+                color = DuoBlue,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 18.sp
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.background(Color(0xFFF1F3F5), RoundedCornerShape(8.dp)).size(32.dp), contentAlignment = Alignment.Center) { Text("-", fontWeight = FontWeight.Bold) }
+                Spacer(modifier = Modifier.width(16.dp))
+                Text("$repCount", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = DuoInk)
+                Spacer(modifier = Modifier.width(16.dp))
+                Box(modifier = Modifier.background(Color(0xFFF1F3F5), RoundedCornerShape(8.dp)).size(32.dp), contentAlignment = Alignment.Center) { Text("+", fontWeight = FontWeight.Bold) }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        // Instructions
+        Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
+            Text(
+                text = "INSTRUCTIONS",
+                color = DuoBlue,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 18.sp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Start in a proper position. Lower your body under control, then push or pull back to the starting position and repeat the exercise. Please remember to keep proper form during this exercise.",
+                color = DuoInk,
+                fontSize = 14.sp,
+                lineHeight = 20.sp
+            )
         }
     }
 }
@@ -772,7 +406,6 @@ fun PullUpDashboardHUD(metrics: com.example.cv.PullUpMetrics) {
 @Composable
 fun CameraWithPoseOverlay(
     exerciseType: String,
-    pullUpMetrics: com.example.cv.PullUpMetrics? = null,
     onFrameAnalysis: (Int, String?, String, Boolean, PoseSkeleton?) -> Unit
 ) {
     val context = LocalContext.current
@@ -817,63 +450,17 @@ fun CameraWithPoseOverlay(
                 }
             }
 
-            // Draw Bone Vectors depending on exercise
-            if (exerciseType == "Pull-up") {
-                // Pull-up specific heatmap and geometry drawing
-                val effortColor = fun(effort: Double): Color {
-                    return if (effort > 0.8) DuoRed else if (effort > 0.6) DuoOrange else if (effort > 0.3) DuoYellow else if (effort > 0.1) DuoGreen else DuoBlue.copy(alpha = 0.5f)
-                }
+            // Default Body outlines
+            drawBone(skeleton.shoulderLeft, skeleton.shoulderRight)
+            drawBone(skeleton.shoulderLeft, skeleton.hipLeft)
+            drawBone(skeleton.shoulderRight, skeleton.hipRight)
+            drawBone(skeleton.hipLeft, skeleton.hipRight)
 
-                // Draw Lats Polygon
-                if (skeleton.shoulderLeft != null && skeleton.shoulderRight != null && skeleton.hipLeft != null && skeleton.hipRight != null) {
-                    val latColor = effortColor(pullUpMetrics?.latsEffort ?: 0.0)
-                    val latPath = androidx.compose.ui.graphics.Path().apply {
-                        moveTo(skeleton.shoulderLeft.toOffset().x, skeleton.shoulderLeft.toOffset().y)
-                        lineTo(skeleton.shoulderRight.toOffset().x, skeleton.shoulderRight.toOffset().y)
-                        lineTo(skeleton.hipRight.toOffset().x, skeleton.hipRight.toOffset().y)
-                        lineTo(skeleton.hipLeft.toOffset().x, skeleton.hipLeft.toOffset().y)
-                        close()
-                    }
-                    drawPath(path = latPath, color = latColor.copy(alpha = 0.8f))
-                }
-                
-                // Draw normal skeleton on top
-                drawBone(skeleton.shoulderLeft, skeleton.shoulderRight)
-                drawBone(skeleton.shoulderLeft, skeleton.hipLeft)
-                drawBone(skeleton.shoulderRight, skeleton.hipRight)
-                drawBone(skeleton.hipLeft, skeleton.hipRight)
-                
-                // Biceps Heatmap
-                val bicepColor = effortColor(pullUpMetrics?.bicepsEffort ?: 0.0)
-                if (skeleton.shoulderLeft != null && skeleton.elbowLeft != null) {
-                    drawLine(color = bicepColor.copy(alpha = 0.8f), start = skeleton.shoulderLeft.toOffset(), end = skeleton.elbowLeft.toOffset(), strokeWidth = 35f)
-                }
-                if (skeleton.shoulderRight != null && skeleton.elbowRight != null) {
-                    drawLine(color = bicepColor.copy(alpha = 0.8f), start = skeleton.shoulderRight.toOffset(), end = skeleton.elbowRight.toOffset(), strokeWidth = 35f)
-                }
-                
-                // Forearms Heatmap
-                val forearmColor = effortColor(pullUpMetrics?.forearmsEffort ?: 0.0)
-                if (skeleton.elbowLeft != null && skeleton.wristLeft != null) {
-                    drawLine(color = forearmColor.copy(alpha = 0.8f), start = skeleton.elbowLeft.toOffset(), end = skeleton.wristLeft.toOffset(), strokeWidth = 25f)
-                }
-                if (skeleton.elbowRight != null && skeleton.wristRight != null) {
-                    drawLine(color = forearmColor.copy(alpha = 0.8f), start = skeleton.elbowRight.toOffset(), end = skeleton.wristRight.toOffset(), strokeWidth = 25f)
-                }
-                
-            } else {
-                // Default Body outlines
-                drawBone(skeleton.shoulderLeft, skeleton.shoulderRight)
-                drawBone(skeleton.shoulderLeft, skeleton.hipLeft)
-                drawBone(skeleton.shoulderRight, skeleton.hipRight)
-                drawBone(skeleton.hipLeft, skeleton.hipRight)
-    
-                // Arms
-                drawBone(skeleton.shoulderLeft, skeleton.elbowLeft)
-                drawBone(skeleton.elbowLeft, skeleton.wristLeft)
-                drawBone(skeleton.shoulderRight, skeleton.elbowRight)
-                drawBone(skeleton.elbowRight, skeleton.wristRight)
-            }
+            // Arms
+            drawBone(skeleton.shoulderLeft, skeleton.elbowLeft)
+            drawBone(skeleton.elbowLeft, skeleton.wristLeft)
+            drawBone(skeleton.shoulderRight, skeleton.elbowRight)
+            drawBone(skeleton.elbowRight, skeleton.wristRight)
 
             // Legs
             drawBone(skeleton.hipLeft, skeleton.kneeLeft)
@@ -1053,4 +640,68 @@ private fun parsePoseLandmarks(pose: com.google.mlkit.vision.pose.Pose): PoseSke
         ankleLeft = getLandmark(PoseLandmark.LEFT_ANKLE),
         ankleRight = getLandmark(PoseLandmark.RIGHT_ANKLE)
     )
+}
+
+@Composable
+fun PullUpDashboardHUD(metrics: com.example.cv.PullUpMetrics) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        // TOP HUD
+        Column {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text("${metrics.repCount}", fontSize = 64.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                Text(" REPS", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(bottom = 12.dp, start = 8.dp))
+            }
+            
+            Box(modifier = Modifier
+                .background(if (metrics.phase == "HOLD") DuoOrange else if (metrics.phase == "PULL") DuoGreen else DuoInk, RoundedCornerShape(8.dp))
+                .padding(horizontal = 8.dp, vertical = 4.dp)) {
+                Text(metrics.phase, color = Color.White, fontWeight = FontWeight.Bold)
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("${metrics.chinAtBarCount}/${metrics.repCount} CHIN AT THE BAR", color = Color.White, fontSize = 12.sp)
+            Text("${metrics.speedLossPct} % SPEED VS REP 1", color = Color.White, fontSize = 12.sp)
+            Text("${metrics.peakPowerW} W PEAK POWER", color = Color.White, fontSize = 12.sp)
+            Text(String.format("+%.2f °C LATS · MODELLED", metrics.latsTempRise), color = Color.White, fontSize = 12.sp)
+            Text("${metrics.latsFatiguedPct} % · ${metrics.bicepsFatiguedPct} % LATS · BICEPS FATIGUED, MODEL", color = Color.White, fontSize = 12.sp)
+            Text(String.format("≈ %.1f kcal / %.1f kJ OF HEAT", metrics.totalKcal, metrics.totalHeatKj), color = Color.White, fontSize = 12.sp)
+        }
+        
+        // BOTTOM HUD
+        if (metrics.lastRep != null) {
+            val rep = metrics.lastRep
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0x99000000), RoundedCornerShape(12.dp))
+                    .padding(12.dp)
+            ) {
+                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    Column {
+                        Text("REP ${rep.repNum}", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (rep.fullLockout) Box(modifier = Modifier.background(DuoGreen, RoundedCornerShape(4.dp)).padding(4.dp)) { Text("FULL LOCK-OUT", color = Color.White, fontSize = 10.sp) }
+                            if (rep.swayCm < 10) Box(modifier = Modifier.background(DuoGreen, RoundedCornerShape(4.dp)).padding(4.dp)) { Text("NO SWING", color = Color.White, fontSize = 10.sp) }
+                        }
+                        Text(String.format("up %.1f s hold %.1f s down %.1f s", rep.durationConcentric, rep.durationHold, rep.durationEccentric), color = Color.White, fontSize = 12.sp)
+                        Text(String.format("peak %.2f m/s %d W ≈ %.1f kcal", rep.peakVelocity, rep.peakPower.toInt(), rep.energyKcal), color = Color.White, fontSize = 12.sp)
+                        Text(String.format("speed loss %d %% sway %.0f cm", rep.speedLossPct, rep.swayCm), color = Color.White, fontSize = 12.sp)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .background(if (rep.chinVerdict.contains("ABOVE")) DuoGreen else if (rep.chinVerdict.contains("AT")) DuoOrange else DuoRed, RoundedCornerShape(8.dp))
+                            .padding(12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(rep.chinVerdict, color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                    }
+                }
+            }
+        }
+    }
 }

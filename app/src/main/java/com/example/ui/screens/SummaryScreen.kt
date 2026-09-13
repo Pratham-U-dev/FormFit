@@ -182,7 +182,7 @@ fun SummaryScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Velocity Telemetry Card
+        // Workout Graph Card
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -196,15 +196,14 @@ fun SummaryScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "VELOCITY TELEMETRY",
+                        text = if (safeSession.exerciseType == "Pull-up") "SHOULDER HEIGHT & MUSCLE EFFORT" else "VELOCITY TELEMETRY",
                         color = TextWhite,
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp,
                         letterSpacing = 1.sp
                     )
-                    // Icon placeholder for expand
                     Icon(
-                        imageVector = Icons.Default.Repeat, // Reusing icon for visual placeholder
+                        imageVector = Icons.Default.Repeat,
                         contentDescription = "Expand",
                         tint = TextGray,
                         modifier = Modifier.size(16.dp)
@@ -213,7 +212,7 @@ fun SummaryScreen(
                 
                 Spacer(modifier = Modifier.height(24.dp))
                 
-                // Graph mockup
+                // Graph Render
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -234,65 +233,132 @@ fun SummaryScreen(
                                 strokeWidth = 1f
                             )
                         }
-                        
-                        // Draw filled areas (bottom brown/yellow, middle green/blue overlay)
-                        drawRect(
-                            color = Color(0xFF5E492B).copy(alpha = 0.5f),
-                            topLeft = Offset(0f, height * 0.7f),
-                            size = androidx.compose.ui.geometry.Size(width, height * 0.3f)
-                        )
-                        drawRect(
-                            color = Color(0xFF1E3A8A).copy(alpha = 0.3f),
-                            topLeft = Offset(0f, 0f),
-                            size = androidx.compose.ui.geometry.Size(width, height * 0.7f)
-                        )
-                        
-                        // Draw the telemetry line
-                        val path = Path()
-                        path.moveTo(0f, height * 0.95f)
-                        path.lineTo(width * 0.1f, height * 0.93f)
-                        path.lineTo(width * 0.2f, height * 0.96f)
-                        path.lineTo(width * 0.3f, height * 0.94f)
-                        path.lineTo(width * 0.4f, height * 0.95f)
-                        path.lineTo(width * 0.5f, height * 0.92f)
-                        path.lineTo(width * 0.6f, height * 0.95f)
-                        
-                        // The big spike
-                        path.lineTo(width * 0.65f, height * 0.1f)
-                        path.lineTo(width * 0.7f, height * 0.95f)
-                        
-                        path.lineTo(width * 0.8f, height * 0.93f)
-                        path.lineTo(width * 0.9f, height * 0.96f)
-                        path.lineTo(width, height * 0.94f)
-                        
-                        drawPath(
-                            path = path,
-                            color = GraphLineColor,
-                            style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
-                        )
-                        
-                        // Draw the active tracking dot
-                        drawCircle(
-                            color = Color.White,
-                            radius = 4.dp.toPx(),
-                            center = Offset(width * 0.62f, height * 0.5f)
-                        )
+
+                        if (safeSession.exerciseType == "Pull-up") {
+                            // Pull-up Frequency Graph (Waveform based on total reps)
+                            val path = Path()
+                            val reps = maxOf(safeSession.totalReps, 1)
+                            
+                            val startX = width * 0.1f
+                            val endX = width * 0.9f
+                            val activeWidth = endX - startX
+                            val waveWidth = activeWidth / reps
+                            
+                            path.moveTo(0f, height * 0.85f)
+                            path.lineTo(startX, height * 0.85f)
+
+                            for (i in 0 until reps) {
+                                val curX = startX + (i * waveWidth)
+                                // Up phase
+                                path.cubicTo(
+                                    curX + (waveWidth * 0.3f), height * 0.85f,
+                                    curX + (waveWidth * 0.4f), height * 0.1f,
+                                    curX + (waveWidth * 0.5f), height * 0.1f
+                                )
+                                // Down phase
+                                path.cubicTo(
+                                    curX + (waveWidth * 0.6f), height * 0.1f,
+                                    curX + (waveWidth * 0.7f), height * 0.85f,
+                                    curX + waveWidth, height * 0.85f
+                                )
+                            }
+                            
+                            path.lineTo(width, height * 0.85f)
+
+                            // Effort gradient for the line
+                            val gradient = Brush.horizontalGradient(
+                                colors = listOf(Color(0xFF3B82F6), Color(0xFF10B981), Color(0xFFF59E0B), Color(0xFFEF4444)),
+                                startX = 0f,
+                                endX = width
+                            )
+                            
+                            drawPath(
+                                path = path,
+                                brush = gradient,
+                                style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
+                            )
+                            
+                            // Draw rep numbers below peaks
+                            for (i in 0 until reps) {
+                                val curX = startX + (i * waveWidth) + (waveWidth * 0.5f)
+                                // A small orange dot at the peak
+                                drawCircle(
+                                    color = Color(0xFFF59E0B),
+                                    radius = 3.dp.toPx(),
+                                    center = Offset(curX, height * 0.1f)
+                                )
+                            }
+                        } else {
+                            // Generic velocity telemetry graph
+                            val path = Path()
+                            path.moveTo(0f, height * 0.95f)
+                            path.lineTo(width * 0.1f, height * 0.93f)
+                            path.lineTo(width * 0.2f, height * 0.96f)
+                            path.lineTo(width * 0.3f, height * 0.94f)
+                            path.lineTo(width * 0.4f, height * 0.95f)
+                            path.lineTo(width * 0.5f, height * 0.92f)
+                            path.lineTo(width * 0.6f, height * 0.95f)
+                            
+                            // The big spike
+                            path.lineTo(width * 0.65f, height * 0.1f)
+                            path.lineTo(width * 0.7f, height * 0.95f)
+                            
+                            path.lineTo(width * 0.8f, height * 0.93f)
+                            path.lineTo(width * 0.9f, height * 0.96f)
+                            path.lineTo(width, height * 0.94f)
+                            
+                            drawPath(
+                                path = path,
+                                color = GraphLineColor,
+                                style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
+                            )
+                            
+                            // Draw the active tracking dot
+                            drawCircle(
+                                color = Color.White,
+                                radius = 4.dp.toPx(),
+                                center = Offset(width * 0.62f, height * 0.5f)
+                            )
+                        }
                     }
                     
-                    Text(
-                        text = "1.7 u/s",
-                        color = TextWhite,
-                        fontSize = 11.sp,
-                        modifier = Modifier.padding(start = 8.dp, top = 8.dp)
-                    )
-                    Text(
-                        text = "0.0 u/s",
-                        color = TextWhite,
-                        fontSize = 11.sp,
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(start = 8.dp, bottom = 8.dp)
-                    )
+                    if (safeSession.exerciseType == "Pull-up") {
+                        Text(
+                            text = "100",
+                            color = TextWhite,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(start = 8.dp, top = 8.dp)
+                        )
+                        Text(
+                            text = "50",
+                            color = TextWhite,
+                            fontSize = 11.sp,
+                            modifier = Modifier.align(Alignment.CenterStart).padding(start = 8.dp)
+                        )
+                        Text(
+                            text = "0",
+                            color = TextWhite,
+                            fontSize = 11.sp,
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(start = 8.dp, bottom = 8.dp)
+                        )
+                    } else {
+                        Text(
+                            text = "1.7 u/s",
+                            color = TextWhite,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(start = 8.dp, top = 8.dp)
+                        )
+                        Text(
+                            text = "0.0 u/s",
+                            color = TextWhite,
+                            fontSize = 11.sp,
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(start = 8.dp, bottom = 8.dp)
+                        )
+                    }
                 }
             }
         }

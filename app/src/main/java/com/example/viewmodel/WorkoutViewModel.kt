@@ -20,9 +20,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.example.cv.PoseSkeleton
 import com.example.cv.PullUpBiomechanics
 import com.example.cv.PullUpMetrics
-import com.example.cv.PoseSkeleton
 
 data class LeaderboardEntry(
     val name: String,
@@ -182,13 +182,12 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
 
     private val _isSoundEnabled = MutableStateFlow(true)
     val isSoundEnabled = _isSoundEnabled.asStateFlow()
-    
-    // Pull-up biomechanics
+
+    // Last completed session summary state (to display on summary screen)
     private val pullUpBiomechanics = PullUpBiomechanics()
     private val _pullUpMetrics = MutableStateFlow(PullUpMetrics())
     val pullUpMetrics = _pullUpMetrics.asStateFlow()
 
-    // Last completed session summary state (to display on summary screen)
     private val _lastCompletedSession = MutableStateFlow<WorkoutSession?>(null)
     val lastCompletedSession = _lastCompletedSession.asStateFlow()
 
@@ -463,7 +462,7 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
     ) {
         _currentScore.value = score
         _currentFeedback.value = feedback
-        
+
         if (skeleton != null && _currentExercise.value == "Pull-up") {
             val metrics = pullUpBiomechanics.processFrame(skeleton)
             _pullUpMetrics.value = metrics
@@ -490,7 +489,7 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
         }
-        
+
         if (mistake != null && Math.random() > 0.7) { // limit spam
             val previousSize = _mistakesList.value.size
             _mistakesList.value = _mistakesList.value + mistake

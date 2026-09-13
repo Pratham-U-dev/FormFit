@@ -159,7 +159,6 @@ class PullUpBiomechanics {
         
         // Chin clearance
         if (barY != null) {
-            // Estimate chin position based on shoulders (approx 15cm above)
             val chinY = shMidY - (0.15 * pxPerM).toFloat() 
             val deltaY = barY!! - chinY
             currentChinClearanceCm = (deltaY / pxPerM) * 100.0 + (8.0 * 0.35)
