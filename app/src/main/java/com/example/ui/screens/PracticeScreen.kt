@@ -188,25 +188,29 @@ fun PracticeScreen(
                             PullUpDashboardHUD(pullUpMetrics)
                         } else {
                             // Live In-Camera Overlay for Reps and Feedback
-                            Column(modifier = Modifier.align(Alignment.TopStart).padding(16.dp)) {
-                            Box(modifier = Modifier.background(DuoSurface1, RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 6.dp)) {
-                                Text(
-                                    text = if (exerciseType == "Plank") "HOLD: ${repCount}s" else "REPS: $repCount",
-                                    color = DuoYellow,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .padding(start = 16.dp, top = 56.dp, end = 16.dp, bottom = 16.dp)
+                            ) {
+                                Box(modifier = Modifier.background(DuoSurface1, RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 6.dp)) {
+                                    Text(
+                                        text = if (exerciseType == "Plank") "HOLD: ${repCount}s" else "REPS: $repCount",
+                                        color = DuoYellow,
+                                        fontSize = 20.sp,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Box(modifier = Modifier.background(if (formScore < 80) Color(0xFFFFEBEE) else Color(0xFFE8F5E9), RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 6.dp)) {
+                                    Text(
+                                        text = feedback,
+                                        color = if (formScore < 80) DuoRed else DuoGreen,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp
+                                    )
+                                }
                             }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Box(modifier = Modifier.background(if (formScore < 80) Color(0xFFFFEBEE) else Color(0xFFE8F5E9), RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 6.dp)) {
-                                Text(
-                                    text = feedback,
-                                    color = if (formScore < 80) DuoRed else DuoGreen,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 12.sp
-                                )
-                            }
-                        }
                         }
                     }
                 } else {
@@ -647,7 +651,7 @@ fun PullUpDashboardHUD(metrics: com.example.cv.PullUpMetrics) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 56.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
         // TOP HUD
