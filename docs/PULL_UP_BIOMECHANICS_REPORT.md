@@ -72,13 +72,16 @@ A robust finite state machine tracks the pull-up lifecycle, enforcing strict thr
 
 The `ExerciseFormEvaluator` runs parallel to the kinematics engine, analyzing the skeletal geometry for biomechanical inefficiencies:
 
-1.  **Chin Clearance:**
-    *   *Logic:* A predicted chin coordinate is established at $Y_{\text{sh}} - 0.15\text{m}$.
-    *   *Verdict:* Computes the delta against the Bar Y. $>3\text{cm}$ yields "Above Bar", $\pm 3\text{cm}$ yields "At Bar", and $<-3\text{cm}$ triggers a "Short Rep" warning.
-2.  **Arm Asymmetry:**
+1.  **Range of Motion (ROM) & Peak Flexion:**
+    *   *Logic:* Measures peak elbow flexion at the top concentric phase ($\theta_{\text{Elbow}} \le 95^\circ$).
+    *   *Verdict:* $\le 95^\circ$ confirms "Full ROM / Deep Pull", while $> 100^\circ$ triggers an "Insufficient Depth" correction.
+2.  **Full Lockout at Bottom:**
+    *   *Logic:* Checks extension angle at the bottom eccentric phase ($\theta_{\text{Elbow}} \ge 140^\circ$).
+    *   *Verdict:* $\ge 140^\circ$ registers full lockout; incomplete extensions are flagged.
+3.  **Arm Asymmetry:**
     *   *Logic:* Evaluates $| \theta_{\text{ElbowLeft}} - \theta_{\text{ElbowRight}} |$.
     *   *Verdict:* Deltas exceeding $25^\circ$ trigger an "Uneven Pull" penalty.
-3.  **Kipping / Sway Detection:**
+4.  **Kipping / Sway Detection:**
     *   *Logic:* Measures the horizontal planar displacement between the hip midpoint and shoulder midpoint.
     *   *Verdict:* Sway exceeding $14\text{cm}$ (0.14 normalized ratio) triggers a "Strict Form / Kipping" penalty.
 

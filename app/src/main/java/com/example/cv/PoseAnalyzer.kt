@@ -54,8 +54,7 @@ class ExerciseFormEvaluator {
     // Pull-up state machine trackers
     private var pullupState = "HANG" // HANG, PULL, TOP, LOWER
     private var minPullupElbowAngle = 180.0
-    private var pullupChinCleared = false
-    private var pullupLockoutAtBottom = true
+    private var pullupFullRomReached = false
 
     fun reset() {
         squatState = "UP"
@@ -72,8 +71,7 @@ class ExerciseFormEvaluator {
 
         pullupState = "HANG"
         minPullupElbowAngle = 180.0
-        pullupChinCleared = false
-        pullupLockoutAtBottom = true
+        pullupFullRomReached = false
     }
 
     fun evaluateSquat(skeleton: PoseSkeleton): EvaluationResult {
@@ -102,7 +100,6 @@ class ExerciseFormEvaluator {
         ) {
             val kneeDist = abs(skeleton.kneeLeft.x - skeleton.kneeRight.x)
             val ankleDist = abs(skeleton.ankleLeft.x - skeleton.ankleRight.x)
-            // If knees collapse closer than ankles by a critical ratio
             if (kneeDist < ankleDist * 0.75) {
                 mistake = "Knees collapsing inward"
                 feedback = "Keep knees aligned with your toes"
@@ -142,7 +139,8 @@ class ExerciseFormEvaluator {
             mistake = mistake,
             feedback = feedback,
             isRepCompleted = isRepCompleted,
-            angleValue = kneeAngle
+            angleValue = kneeAngle,
+            exerciseState = if (squatState == "UP") "STAND" else if (squatDeepEnough) "DEEP SQUAT" else "DESCENDING"
         )
     }
 
@@ -206,7 +204,8 @@ class ExerciseFormEvaluator {
             mistake = mistake,
             feedback = feedback,
             isRepCompleted = isRepCompleted,
-            angleValue = elbowAngle
+            angleValue = elbowAngle,
+            exerciseState = if (pushupState == "UP") "PLANK" else if (pushupDeepEnough) "BOTTOM" else "LOWERING"
         )
     }
 
@@ -229,9 +228,7 @@ class ExerciseFormEvaluator {
             lungeDeepEnough = true
         }
 
-        // Check front knee over toes alignment (using simple X coordinate comparison)
         if (skeleton.kneeLeft != null && skeleton.ankleLeft != null) {
-            // Front knee should ideally not extend too far horizontally past ankle
             if (abs(skeleton.kneeLeft.x - skeleton.ankleLeft.x) > 0.15) {
                 mistake = "Incorrect lunge knee alignment"
                 feedback = "Don't push front knee past your toes!"
@@ -270,7 +267,8 @@ class ExerciseFormEvaluator {
             mistake = mistake,
             feedback = feedback,
             isRepCompleted = isRepCompleted,
-            angleValue = kneeAngle
+            angleValue = kneeAngle,
+            exerciseState = if (lungeState == "UP") "STAND" else if (lungeDeepEnough) "BOTTOM" else "LUNGING"
         )
     }
 
@@ -284,13 +282,12 @@ class ExerciseFormEvaluator {
         var mistake: String? = null
         var score = 100
 
-        // In a perfect plank, hip angle should be very close to straight (170° to 190°)
         if (hipAngle < 165.0) {
             mistake = "Hip sagging during plank"
             feedback = "Squeeze your core! Lift hips."
             score = 65
         } else if (hipAngle > 195.0) {
-            mistake = "Hip sagging during plank" // Keep simple mistake categories for PRD
+            mistake = "Hip sagging during plank"
             feedback = "Lower your hips to straight level."
             score = 65
         } else {
@@ -302,7 +299,8 @@ class ExerciseFormEvaluator {
             mistake = mistake,
             feedback = feedback,
             isRepCompleted = false,
-            angleValue = hipAngle
+            angleValue = hipAngle,
+            exerciseState = if (mistake != null) "ALIGNMENT BREAK" else "HOLDING"
         )
     }
 
@@ -326,7 +324,7 @@ class ExerciseFormEvaluator {
             else -> PoseGeometry.calculateAngle(shoulder, elbow, wrist)
         }
 
-        var feedback = "Dead hang... pull chin over bar!"
+        var feedback = "Dead hang... pull all the way up!"
         var mistake: String? = null
         var isRepCompleted = false
         var score = 100
@@ -335,18 +333,9 @@ class ExerciseFormEvaluator {
             minPullupElbowAngle = avgElbowAngle
         }
 
-        // Check if chin reached bar level (elbow angle < 85° or shoulders near wrist height)
-        val avgWristY = if (skeleton.wristLeft != null && skeleton.wristRight != null) {
-            (skeleton.wristLeft.y + skeleton.wristRight.y) / 2f
-        } else wrist.y
-        val avgShoulderY = if (skeleton.shoulderLeft != null && skeleton.shoulderRight != null) {
-            (skeleton.shoulderLeft.y + skeleton.shoulderRight.y) / 2f
-        } else shoulder.y
-
-        // When shoulders rise within close proximity to wrists, chin is over bar
-        val chinClearedThreshold = (avgShoulderY - avgWristY) < 0.18f || avgElbowAngle <= 80.0
-        if (chinClearedThreshold) {
-            pullupChinCleared = true
+        // Check if top range of motion reached (elbow angle <= 95°)
+        if (avgElbowAngle <= 95.0) {
+            pullupFullRomReached = true
         }
 
         // Arm asymmetry check
@@ -372,47 +361,43 @@ class ExerciseFormEvaluator {
 
         when (pullupState) {
             "HANG" -> {
-                // User starts pulling up when elbows flex below 145°
-                if (avgElbowAngle < 145.0) {
+                if (avgElbowAngle < 130.0) {
                     pullupState = "PULL"
                     minPullupElbowAngle = avgElbowAngle
-                    pullupChinCleared = false
-                    pullupLockoutAtBottom = true
+                    pullupFullRomReached = false
                     feedback = "Pulling up! Drive elbows down."
                 } else {
                     feedback = "Hanging from bar. Ready to pull!"
                 }
             }
             "PULL" -> {
-                if (avgElbowAngle < 85.0 || pullupChinCleared) {
+                if (avgElbowAngle <= 95.0 || pullupFullRomReached) {
                     pullupState = "TOP"
-                    feedback = "Chin over bar! Hold briefly."
+                    feedback = "Full depth reached! Hold briefly."
                 } else {
-                    feedback = "Drive higher! Get chin over the bar."
+                    feedback = "Drive higher for full range of motion!"
                 }
             }
             "TOP" -> {
-                // Lowering down
-                if (avgElbowAngle > 100.0) {
+                if (avgElbowAngle > 105.0) {
                     pullupState = "LOWER"
                     feedback = "Controlled descent... full extension."
                 } else {
-                    feedback = "Chin cleared! Now lower smoothly."
+                    feedback = "Top reached! Now lower smoothly."
                 }
             }
             "LOWER" -> {
-                // Bottom lockout check: elbows must reach >= 150°
-                if (avgElbowAngle >= 150.0) {
+                if (avgElbowAngle >= 140.0) {
                     pullupState = "HANG"
                     isRepCompleted = true
 
-                    if (!pullupChinCleared && minPullupElbowAngle > 88.0) {
-                        mistake = "Chin not over bar"
-                        feedback = "Pull higher! Chin must clear the bar."
+                    if (!pullupFullRomReached && minPullupElbowAngle > 100.0) {
+                        mistake = "Pull-up depth insufficient"
+                        feedback = "Pull higher! Aim for full range of motion."
                         score = 70
                     } else {
-                        feedback = "Full lockout & chin cleared! Excellent rep."
-                        score = if (mistake != null) 72 else 98
+                        feedback = "Full lockout & deep pull! Excellent rep."
+                        score = if (mistake != null) 75 else 98
                     }
                     minPullupElbowAngle = 180.0
                 } else {
@@ -426,7 +411,8 @@ class ExerciseFormEvaluator {
             mistake = mistake,
             feedback = feedback,
             isRepCompleted = isRepCompleted,
-            angleValue = avgElbowAngle
+            angleValue = avgElbowAngle,
+            exerciseState = pullupState
         )
     }
 }
@@ -436,7 +422,8 @@ data class EvaluationResult(
     val mistake: String?,
     val feedback: String,
     val isRepCompleted: Boolean,
-    val angleValue: Double
+    val angleValue: Double,
+    val exerciseState: String = "READY"
 ) {
     companion object {
         fun idle(message: String) = EvaluationResult(
@@ -444,7 +431,8 @@ data class EvaluationResult(
             mistake = null,
             feedback = message,
             isRepCompleted = false,
-            angleValue = 180.0
+            angleValue = 180.0,
+            exerciseState = "READY"
         )
     }
 }

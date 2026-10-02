@@ -76,6 +76,7 @@ fun PracticeScreen(
     val exerciseType by viewModel.currentExercise.collectAsState()
     val repCount by viewModel.repCount.collectAsState()
     val pullUpMetrics by viewModel.pullUpMetrics.collectAsState()
+    val exerciseState by viewModel.exerciseState.collectAsState()
     val timerSeconds by viewModel.sessionSeconds.collectAsState()
     val feedback by viewModel.currentFeedback.collectAsState()
     val formScore by viewModel.currentScore.collectAsState()
@@ -173,33 +174,43 @@ fun PracticeScreen(
         ) {
             if (isVirtual) {
                 // RENDER EXERCISE INFO SCREEN
-                ExerciseInfoView(exerciseType = exerciseType, repCount = repCount)
+                ExerciseInfoView(exerciseType = exerciseType, repCount = repCount, exerciseState = exerciseState)
             } else {
                 // RENDER CAMERAX PREVIEW OR PERMISSION REQUEST
                 if (cameraPermissionState.status.isGranted) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         CameraWithPoseOverlay(
                             exerciseType = exerciseType,
-                            onFrameAnalysis = { score, mistake, fb, rep, skeleton ->
-                                viewModel.processCameraFrameAnalysis(score, mistake, fb, rep, skeleton)
+                            onFrameAnalysis = { score, mistake, fb, rep, state, skeleton ->
+                                viewModel.processCameraFrameAnalysis(score, mistake, fb, rep, state, skeleton)
                             }
                         )
                         if (exerciseType == "Pull-up") {
                             PullUpDashboardHUD(pullUpMetrics)
                         } else {
-                            // Live In-Camera Overlay for Reps and Feedback
+                            // Live In-Camera Overlay for Reps, State and Feedback
                             Column(
                                 modifier = Modifier
                                     .align(Alignment.TopStart)
                                     .padding(start = 16.dp, top = 56.dp, end = 16.dp, bottom = 16.dp)
                             ) {
-                                Box(modifier = Modifier.background(DuoSurface1, RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 6.dp)) {
-                                    Text(
-                                        text = if (exerciseType == "Plank") "HOLD: ${repCount}s" else "REPS: $repCount",
-                                        color = DuoYellow,
-                                        fontSize = 20.sp,
-                                        fontWeight = FontWeight.ExtraBold
-                                    )
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Box(modifier = Modifier.background(DuoSurface1, RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 6.dp)) {
+                                        Text(
+                                            text = if (exerciseType == "Plank") "HOLD: ${repCount}s" else "REPS: $repCount",
+                                            color = DuoYellow,
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.ExtraBold
+                                        )
+                                    }
+                                    Box(modifier = Modifier.background(DuoBlue, RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 6.dp)) {
+                                        Text(
+                                            text = "STATE: $exerciseState",
+                                            color = Color.White,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.ExtraBold
+                                        )
+                                    }
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Box(modifier = Modifier.background(if (formScore < 80) Color(0xFFFFEBEE) else Color(0xFFE8F5E9), RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 6.dp)) {
@@ -297,7 +308,7 @@ fun PracticeScreen(
 
 
 @Composable
-fun ExerciseInfoView(exerciseType: String, repCount: Int) {
+fun ExerciseInfoView(exerciseType: String, repCount: Int, exerciseState: String = "READY") {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -311,16 +322,26 @@ fun ExerciseInfoView(exerciseType: String, repCount: Int) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = exerciseType.uppercase(),
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = DuoInk
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .background(DuoBlue, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text("STATE: $exerciseState", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                }
+            }
             Text(
-                text = exerciseType.uppercase(),
-                fontSize = 20.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = DuoInk
-            )
-            Text(
-                text = "Replace",
+                text = "SANDBOX",
                 color = DuoBlue,
-                fontSize = 14.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
             )
         }
@@ -410,7 +431,7 @@ fun ExerciseInfoView(exerciseType: String, repCount: Int) {
 @Composable
 fun CameraWithPoseOverlay(
     exerciseType: String,
-    onFrameAnalysis: (Int, String?, String, Boolean, PoseSkeleton?) -> Unit
+    onFrameAnalysis: (Int, String?, String, Boolean, String, PoseSkeleton?) -> Unit
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -572,7 +593,7 @@ fun CameraWithPoseOverlay(
                                     else -> EvaluationResult.idle("Active")
                                 }
                                 currentResult = result
-                                onFrameAnalysis(result.score, result.mistake, result.feedback, result.isRepCompleted, skeleton)
+                                onFrameAnalysis(result.score, result.mistake, result.feedback, result.isRepCompleted, result.exerciseState, skeleton)
                             }
                         }
                     )
@@ -662,18 +683,22 @@ fun PullUpDashboardHUD(metrics: com.example.cv.PullUpMetrics) {
             }
             
             Box(modifier = Modifier
-                .background(if (metrics.phase == "HOLD") DuoOrange else if (metrics.phase == "PULL") DuoGreen else DuoInk, RoundedCornerShape(8.dp))
-                .padding(horizontal = 8.dp, vertical = 4.dp)) {
-                Text(metrics.phase, color = Color.White, fontWeight = FontWeight.Bold)
+                .background(
+                    if (metrics.phase == "HOLD" || metrics.phase == "TOP") DuoOrange 
+                    else if (metrics.phase == "PULL") DuoGreen 
+                    else DuoInk, 
+                    RoundedCornerShape(8.dp)
+                )
+                .padding(horizontal = 10.dp, vertical = 5.dp)) {
+                Text("STATE: ${metrics.phase}", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
             }
             
             Spacer(modifier = Modifier.height(8.dp))
-            Text("${metrics.chinAtBarCount}/${metrics.repCount} CHIN AT THE BAR", color = Color.White, fontSize = 12.sp)
             Text("${metrics.speedLossPct} % SPEED VS REP 1", color = Color.White, fontSize = 12.sp)
             Text("${metrics.peakPowerW} W PEAK POWER", color = Color.White, fontSize = 12.sp)
             Text(String.format("+%.2f °C LATS · MODELLED", metrics.latsTempRise), color = Color.White, fontSize = 12.sp)
-            Text("${metrics.latsFatiguedPct} % · ${metrics.bicepsFatiguedPct} % LATS · BICEPS FATIGUED, MODEL", color = Color.White, fontSize = 12.sp)
-            Text(String.format("≈ %.1f kcal / %.1f kJ OF HEAT", metrics.totalKcal, metrics.totalHeatKj), color = Color.White, fontSize = 12.sp)
+            Text("${metrics.latsFatiguedPct} % · ${metrics.bicepsFatiguedPct} % LATS · BICEPS FATIGUED", color = Color.White, fontSize = 12.sp)
+            Text(String.format("≈ %.1f kcal / %.1f kJ WORK", metrics.totalKcal, metrics.totalHeatKj), color = Color.White, fontSize = 12.sp)
         }
         
         // BOTTOM HUD
@@ -690,7 +715,7 @@ fun PullUpDashboardHUD(metrics: com.example.cv.PullUpMetrics) {
                         Text("REP ${rep.repNum}", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             if (rep.fullLockout) Box(modifier = Modifier.background(DuoGreen, RoundedCornerShape(4.dp)).padding(4.dp)) { Text("FULL LOCK-OUT", color = Color.White, fontSize = 10.sp) }
-                            if (rep.swayCm < 10) Box(modifier = Modifier.background(DuoGreen, RoundedCornerShape(4.dp)).padding(4.dp)) { Text("NO SWING", color = Color.White, fontSize = 10.sp) }
+                            if (rep.swayCm < 10) Box(modifier = Modifier.background(DuoGreen, RoundedCornerShape(4.dp)).padding(4.dp)) { Text("STRICT NO SWING", color = Color.White, fontSize = 10.sp) }
                         }
                         Text(String.format("up %.1f s hold %.1f s down %.1f s", rep.durationConcentric, rep.durationHold, rep.durationEccentric), color = Color.White, fontSize = 12.sp)
                         Text(String.format("peak %.2f m/s %d W ≈ %.1f kcal", rep.peakVelocity, rep.peakPower.toInt(), rep.energyKcal), color = Color.White, fontSize = 12.sp)
@@ -698,7 +723,7 @@ fun PullUpDashboardHUD(metrics: com.example.cv.PullUpMetrics) {
                     }
                     Box(
                         modifier = Modifier
-                            .background(if (rep.chinVerdict.contains("ABOVE")) DuoGreen else if (rep.chinVerdict.contains("AT")) DuoOrange else DuoRed, RoundedCornerShape(8.dp))
+                            .background(if (rep.fullLockout) DuoGreen else DuoOrange, RoundedCornerShape(8.dp))
                             .padding(12.dp),
                         contentAlignment = Alignment.Center
                     ) {

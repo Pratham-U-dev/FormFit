@@ -9,9 +9,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -22,27 +25,25 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.viewmodel.WorkoutViewModel
 
-// Custom colors based on the screenshot
+// Custom colors
 val DarkBackground = Color(0xFF131722)
 val CardBackground = Color(0xFF202638)
 val AccentGreen = Color(0xFF1FD57E)
 val TextGray = Color(0xFF8692A6)
 val TextWhite = Color(0xFFF3F4F6)
 val AlertRed = Color(0xFFEF4444)
-val GraphLineColor = Color(0xFF3B82F6)
+val WarningOrange = Color(0xFFF59E0B)
+val DuoBlueAccent = Color(0xFF3B82F6)
 
 @Composable
 fun SummaryScreen(
@@ -51,8 +52,13 @@ fun SummaryScreen(
     modifier: Modifier = Modifier
 ) {
     val session by viewModel.lastCompletedSession.collectAsState()
-    val safeSession = session ?: return
+    val isPersonalBest by viewModel.isPersonalBest.collectAsState()
+    val repScores by viewModel.lastSessionRepScores.collectAsState()
+    val mistakes by viewModel.lastSessionMistakes.collectAsState()
+    val calories by viewModel.lastSessionCalories.collectAsState()
+    val peakPower by viewModel.lastSessionPeakPower.collectAsState()
     
+    val safeSession = session ?: return
     val scrollState = rememberScrollState()
 
     Column(
@@ -82,7 +88,7 @@ fun SummaryScreen(
             textAlign = TextAlign.Center
         )
         Text(
-            text = "${safeSession.exerciseType} · Session Stats",
+            text = "${safeSession.exerciseType.uppercase()} · Biomechanics Analytics",
             color = TextGray,
             fontWeight = FontWeight.Medium,
             fontSize = 14.sp,
@@ -91,32 +97,49 @@ fun SummaryScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // New Personal Best Card
+        // Dynamic Achievement Banner (Calculated from real session performance)
+        val bannerBg = if (isPersonalBest) Color(0xFF113227) else if (safeSession.averageScore >= 90) Color(0xFF1E293B) else Color(0xFF1F2430)
+        val bannerBorder = if (isPersonalBest) AccentGreen else if (safeSession.averageScore >= 90) DuoBlueAccent else TextGray.copy(alpha = 0.4f)
+        val bannerIcon = if (isPersonalBest) Icons.Default.EmojiEvents else if (safeSession.averageScore >= 90) Icons.Default.Star else Icons.Default.CheckCircle
+        val bannerIconTint = if (isPersonalBest) AccentGreen else if (safeSession.averageScore >= 90) WarningOrange else AccentGreen
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFF113227), shape = RoundedCornerShape(16.dp))
-                .border(1.5.dp, AccentGreen.copy(alpha = 0.5f), shape = RoundedCornerShape(16.dp))
+                .background(bannerBg, shape = RoundedCornerShape(16.dp))
+                .border(1.5.dp, bannerBorder.copy(alpha = 0.6f), shape = RoundedCornerShape(16.dp))
                 .padding(16.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = Icons.Default.EmojiEvents,
-                    contentDescription = "PB Trophy",
-                    tint = AccentGreen,
+                    imageVector = bannerIcon,
+                    contentDescription = "Status Icon",
+                    tint = bannerIconTint,
                     modifier = Modifier.size(32.dp)
                 )
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
+                    val titleText = when {
+                        isPersonalBest -> "New Personal Best!"
+                        safeSession.averageScore >= 90 && safeSession.totalReps >= 3 -> "Form Master: 90%+ Accuracy"
+                        safeSession.totalReps > 0 -> "Target Reps Completed"
+                        else -> "Session Recorded"
+                    }
+                    val subtitleText = when {
+                        isPersonalBest -> "New rep record: ${safeSession.totalReps} completed repetitions!"
+                        safeSession.averageScore >= 90 && safeSession.totalReps >= 3 -> "Elite biomechanical control maintained throughout."
+                        safeSession.totalReps > 0 -> "Completed ${safeSession.totalReps} reps in ${safeSession.durationSeconds}s."
+                        else -> "Movement logged. Keep training for progress."
+                    }
                     Text(
-                        text = "New Personal Best!",
-                        color = AccentGreen,
+                        text = titleText,
+                        color = bannerIconTint,
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "New rep record — you're getting stronger!",
+                        text = subtitleText,
                         color = TextGray,
                         fontSize = 13.sp
                     )
@@ -126,7 +149,7 @@ fun SummaryScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // 2x2 Grid of Stats
+        // 2x2 Grid of Real Session Metrics
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -138,16 +161,16 @@ fun SummaryScreen(
                 StatCard(
                     title = "Total Reps",
                     value = safeSession.totalReps.toString(),
-                    subtitle = "Completed this session",
+                    subtitle = if (safeSession.exerciseType == "Plank") "Seconds held" else "Reps completed",
                     icon = Icons.Default.Repeat,
                     modifier = Modifier.weight(1f)
                 )
                 
                 val avgTime = if (safeSession.totalReps > 0) safeSession.durationSeconds.toFloat() / safeSession.totalReps else 0f
                 StatCard(
-                    title = "Avg Time / Rep",
-                    value = String.format("%.1fs", avgTime),
-                    subtitle = "Seconds per rep",
+                    title = "Average Pace",
+                    value = if (avgTime > 0) String.format("%.1fs", avgTime) else "--",
+                    subtitle = "Tempo per rep",
                     icon = Icons.Default.Speed,
                     modifier = Modifier.weight(1f)
                 )
@@ -157,14 +180,17 @@ fun SummaryScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Approximate faults based on score
-                val faults = if (safeSession.averageScore >= 95) 0.0 else if (safeSession.averageScore >= 80) 0.5 else 1.2
                 StatCard(
-                    title = "Form Breaks / Rep",
-                    value = String.format("%.1f", faults),
-                    subtitle = "Avg faults per rep",
-                    icon = Icons.Default.WarningAmber,
-                    iconTint = if (faults > 0) AlertRed else TextGray,
+                    title = "Form Score",
+                    value = if (safeSession.averageScore > 0) "${safeSession.averageScore}%" else "--",
+                    subtitle = when {
+                        safeSession.averageScore >= 90 -> "Technique: Excellent"
+                        safeSession.averageScore >= 80 -> "Technique: Good"
+                        safeSession.averageScore > 0 -> "Technique: Needs Work"
+                        else -> "No reps scored"
+                    },
+                    icon = Icons.Default.CheckCircle,
+                    iconTint = if (safeSession.averageScore >= 85) AccentGreen else WarningOrange,
                     modifier = Modifier.weight(1f)
                 )
                 
@@ -178,11 +204,34 @@ fun SummaryScreen(
                     modifier = Modifier.weight(1f)
                 )
             }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                StatCard(
+                    title = "Energy Burned",
+                    value = String.format("%.1f kcal", calories),
+                    subtitle = if (peakPower > 0) "$peakPower W Peak Power" else "Active metabolic work",
+                    icon = Icons.Default.LocalFireDepartment,
+                    iconTint = WarningOrange,
+                    modifier = Modifier.weight(1f)
+                )
+                
+                StatCard(
+                    title = "Form Breaks",
+                    value = safeSession.mistakeCount.toString(),
+                    subtitle = if (safeSession.mistakeCount == 0) "Zero technique errors" else "Detected kinematic faults",
+                    icon = Icons.Default.WarningAmber,
+                    iconTint = if (safeSession.mistakeCount > 0) AlertRed else TextGray,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Workout Graph Card
+        // Dynamic Rep-by-Rep Form Accuracy Chart
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -196,167 +245,155 @@ fun SummaryScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (safeSession.exerciseType == "Pull-up") "SHOULDER HEIGHT & MUSCLE EFFORT" else "VELOCITY TELEMETRY",
+                        text = "REP-BY-REP FORM ACCURACY (%)",
                         color = TextWhite,
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp,
                         letterSpacing = 1.sp
                     )
-                    Icon(
-                        imageVector = Icons.Default.Repeat,
-                        contentDescription = "Expand",
-                        tint = TextGray,
-                        modifier = Modifier.size(16.dp)
+                    Text(
+                        text = if (repScores.isNotEmpty()) "${repScores.size} REPS ANALYZED" else "NO REPS",
+                        color = TextGray,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
                 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
                 
-                // Graph Render
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(150.dp)
-                ) {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        val width = size.width
-                        val height = size.height
-                        
-                        // Draw background horizontal lines
-                        val lineCount = 4
-                        for (i in 0 until lineCount) {
-                            val y = height * (i / (lineCount - 1).toFloat())
-                            drawLine(
-                                color = TextGray.copy(alpha = 0.2f),
-                                start = Offset(0f, y),
-                                end = Offset(width, y),
-                                strokeWidth = 1f
-                            )
-                        }
-
-                        if (safeSession.exerciseType == "Pull-up") {
-                            // Pull-up Frequency Graph (Waveform based on total reps)
-                            val path = Path()
-                            val reps = maxOf(safeSession.totalReps, 1)
+                if (repScores.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(140.dp)
+                    ) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val w = size.width
+                            val h = size.height
                             
-                            val startX = width * 0.1f
-                            val endX = width * 0.9f
-                            val activeWidth = endX - startX
-                            val waveWidth = activeWidth / reps
-                            
-                            path.moveTo(0f, height * 0.85f)
-                            path.lineTo(startX, height * 0.85f)
-
-                            for (i in 0 until reps) {
-                                val curX = startX + (i * waveWidth)
-                                // Up phase
-                                path.cubicTo(
-                                    curX + (waveWidth * 0.3f), height * 0.85f,
-                                    curX + (waveWidth * 0.4f), height * 0.1f,
-                                    curX + (waveWidth * 0.5f), height * 0.1f
-                                )
-                                // Down phase
-                                path.cubicTo(
-                                    curX + (waveWidth * 0.6f), height * 0.1f,
-                                    curX + (waveWidth * 0.7f), height * 0.85f,
-                                    curX + waveWidth, height * 0.85f
+                            // Horizontal grid guide lines
+                            val gridLines = listOf(1.0f, 0.75f, 0.5f, 0.25f, 0.0f)
+                            gridLines.forEach { frac ->
+                                val y = h * (1f - frac)
+                                drawLine(
+                                    color = TextGray.copy(alpha = 0.15f),
+                                    start = Offset(0f, y),
+                                    end = Offset(w, y),
+                                    strokeWidth = 1f
                                 )
                             }
                             
-                            path.lineTo(width, height * 0.85f)
-
-                            // Effort gradient for the line
-                            val gradient = Brush.horizontalGradient(
-                                colors = listOf(Color(0xFF3B82F6), Color(0xFF10B981), Color(0xFFF59E0B), Color(0xFFEF4444)),
-                                startX = 0f,
-                                endX = width
-                            )
+                            val count = repScores.size
+                            val barSpacing = w / (count + 0.5f)
+                            val barWidth = (barSpacing * 0.6f).coerceIn(12f, 40f)
                             
-                            drawPath(
-                                path = path,
-                                brush = gradient,
-                                style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
-                            )
-                            
-                            // Draw rep numbers below peaks
-                            for (i in 0 until reps) {
-                                val curX = startX + (i * waveWidth) + (waveWidth * 0.5f)
-                                // A small orange dot at the peak
-                                drawCircle(
-                                    color = Color(0xFFF59E0B),
-                                    radius = 3.dp.toPx(),
-                                    center = Offset(curX, height * 0.1f)
+                            repScores.forEachIndexed { index, score ->
+                                val xCenter = (index + 0.8f) * barSpacing
+                                val barHeight = (score / 100f) * (h * 0.85f)
+                                val yTop = h - barHeight
+                                
+                                val barColor = when {
+                                    score >= 85 -> AccentGreen
+                                    score >= 70 -> WarningOrange
+                                    else -> AlertRed
+                                }
+                                
+                                drawRoundRect(
+                                    color = barColor,
+                                    topLeft = Offset(xCenter - barWidth / 2f, yTop),
+                                    size = Size(barWidth, barHeight),
+                                    cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
                                 )
                             }
-                        } else {
-                            // Generic velocity telemetry graph
-                            val path = Path()
-                            path.moveTo(0f, height * 0.95f)
-                            path.lineTo(width * 0.1f, height * 0.93f)
-                            path.lineTo(width * 0.2f, height * 0.96f)
-                            path.lineTo(width * 0.3f, height * 0.94f)
-                            path.lineTo(width * 0.4f, height * 0.95f)
-                            path.lineTo(width * 0.5f, height * 0.92f)
-                            path.lineTo(width * 0.6f, height * 0.95f)
-                            
-                            // The big spike
-                            path.lineTo(width * 0.65f, height * 0.1f)
-                            path.lineTo(width * 0.7f, height * 0.95f)
-                            
-                            path.lineTo(width * 0.8f, height * 0.93f)
-                            path.lineTo(width * 0.9f, height * 0.96f)
-                            path.lineTo(width, height * 0.94f)
-                            
-                            drawPath(
-                                path = path,
-                                color = GraphLineColor,
-                                style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
-                            )
-                            
-                            // Draw the active tracking dot
-                            drawCircle(
-                                color = Color.White,
-                                radius = 4.dp.toPx(),
-                                center = Offset(width * 0.62f, height * 0.5f)
-                            )
                         }
                     }
                     
-                    if (safeSession.exerciseType == "Pull-up") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Rep 1", color = TextGray, fontSize = 11.sp)
+                        if (repScores.size > 1) {
+                            Text("Rep ${repScores.size}", color = TextGray, fontSize = 11.sp)
+                        }
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(80.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text(
-                            text = "100",
-                            color = TextWhite,
-                            fontSize = 11.sp,
-                            modifier = Modifier.padding(start = 8.dp, top = 8.dp)
+                            text = "No completed repetitions recorded in this session.",
+                            color = TextGray,
+                            fontSize = 13.sp,
+                            textAlign = TextAlign.Center
                         )
-                        Text(
-                            text = "50",
-                            color = TextWhite,
-                            fontSize = 11.sp,
-                            modifier = Modifier.align(Alignment.CenterStart).padding(start = 8.dp)
-                        )
-                        Text(
-                            text = "0",
-                            color = TextWhite,
-                            fontSize = 11.sp,
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Detected Faults & Form Coaching
+        val uniqueMistakes = mistakes.distinct()
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(CardBackground, shape = RoundedCornerShape(16.dp))
+                .padding(16.dp)
+        ) {
+            Column {
+                Text(
+                    text = "BIOMECHANICAL FEEDBACK",
+                    color = TextWhite,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    letterSpacing = 1.sp
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                if (uniqueMistakes.isNotEmpty()) {
+                    uniqueMistakes.forEach { mistakeItem ->
+                        Row(
                             modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(start = 8.dp, bottom = 8.dp)
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.WarningAmber,
+                                contentDescription = null,
+                                tint = WarningOrange,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = mistakeItem,
+                                color = TextWhite,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = AccentGreen,
+                            modifier = Modifier.size(18.dp)
                         )
-                    } else {
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "1.7 u/s",
-                            color = TextWhite,
-                            fontSize = 11.sp,
-                            modifier = Modifier.padding(start = 8.dp, top = 8.dp)
-                        )
-                        Text(
-                            text = "0.0 u/s",
-                            color = TextWhite,
-                            fontSize = 11.sp,
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(start = 8.dp, bottom = 8.dp)
+                            text = "Clean execution! No technique faults detected.",
+                            color = AccentGreen,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
@@ -437,4 +474,3 @@ fun StatCard(
         }
     }
 }
-

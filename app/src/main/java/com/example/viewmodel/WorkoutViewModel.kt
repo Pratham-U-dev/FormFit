@@ -188,6 +188,24 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
     private val _pullUpMetrics = MutableStateFlow(PullUpMetrics())
     val pullUpMetrics = _pullUpMetrics.asStateFlow()
 
+    private val _exerciseState = MutableStateFlow("READY")
+    val exerciseState = _exerciseState.asStateFlow()
+
+    private val _lastSessionRepScores = MutableStateFlow<List<Int>>(emptyList())
+    val lastSessionRepScores = _lastSessionRepScores.asStateFlow()
+
+    private val _lastSessionMistakes = MutableStateFlow<List<String>>(emptyList())
+    val lastSessionMistakes = _lastSessionMistakes.asStateFlow()
+
+    private val _isPersonalBest = MutableStateFlow(false)
+    val isPersonalBest = _isPersonalBest.asStateFlow()
+
+    private val _lastSessionCalories = MutableStateFlow(0.0)
+    val lastSessionCalories = _lastSessionCalories.asStateFlow()
+
+    private val _lastSessionPeakPower = MutableStateFlow(0)
+    val lastSessionPeakPower = _lastSessionPeakPower.asStateFlow()
+
     private val _lastCompletedSession = MutableStateFlow<WorkoutSession?>(null)
     val lastCompletedSession = _lastCompletedSession.asStateFlow()
 
@@ -317,6 +335,9 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         _repScores.value = emptyList()
         _mistakesList.value = emptyList()
         _currentScore.value = 100
+        pullUpBiomechanics.reset()
+        _pullUpMetrics.value = PullUpMetrics()
+        _exerciseState.value = if (exerciseType == "Pull-up") "HANG" else if (exerciseType == "Plank") "HOLDING" else "STAND"
         _currentFeedback.value = when (exerciseType) {
             "Pull-up" -> "Grip the bar with overhand grip. Hang fully extended."
             "Squat" -> "Get ready to squat! Stand straight."
@@ -356,12 +377,26 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                 
                 if (goingDown) {
                     cycleProgress += 0.05f
+                    _exerciseState.value = when (exerciseType) {
+                        "Pull-up" -> if (cycleProgress > 0.8f) "TOP" else "PULL"
+                        "Squat" -> if (cycleProgress > 0.8f) "DEEP SQUAT" else "DESCENDING"
+                        "Push-up" -> if (cycleProgress > 0.8f) "BOTTOM" else "LOWERING"
+                        "Lunge" -> if (cycleProgress > 0.8f) "BOTTOM" else "LUNGING"
+                        else -> "HOLDING"
+                    }
                     if (cycleProgress >= 1f) {
                         cycleProgress = 1f
                         goingDown = false
                     }
                 } else {
                     cycleProgress -= 0.05f
+                    _exerciseState.value = when (exerciseType) {
+                        "Pull-up" -> if (cycleProgress < 0.2f) "HANG" else "LOWER"
+                        "Squat" -> if (cycleProgress < 0.2f) "STAND" else "ASCENDING"
+                        "Push-up" -> if (cycleProgress < 0.2f) "PLANK" else "PUSHING UP"
+                        "Lunge" -> if (cycleProgress < 0.2f) "STAND" else "RETURNING"
+                        else -> "HOLDING"
+                    }
                     if (cycleProgress <= 0f) {
                         cycleProgress = 0f
                         goingDown = true
@@ -385,7 +420,7 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                         if (formScore >= 85) {
                             com.example.audio.DuoSoundPlayer.playCorrect()
                             _currentFeedback.value = when (exerciseType) {
-                                "Pull-up" -> "Chin cleared bar! Full lockout."
+                                "Pull-up" -> "Full range of motion! Full lockout."
                                 "Squat" -> "Excellent squat depth! Perfect posture."
                                 "Push-up" -> "Perfect push-up! Keep it up."
                                 "Lunge" -> "Great alignment! Excellent balance."
@@ -395,7 +430,7 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                             com.example.audio.DuoSoundPlayer.playMistake()
                             val mistake = when (exerciseType) {
                                 "Pull-up" -> if (Math.random() > 0.5) {
-                                    "Chin not over bar"
+                                    "Pull-up depth insufficient"
                                 } else {
                                     "Excessive body swing / kip"
                                 }
@@ -416,7 +451,7 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                             
                             _mistakesList.value = _mistakesList.value + mistake
                             _currentFeedback.value = when (mistake) {
-                                "Chin not over bar" -> "Pull higher! Get chin completely over the bar."
+                                "Pull-up depth insufficient" -> "Pull higher! Aim for full range of motion."
                                 "Excessive body swing / kip" -> "Keep body quiet! Avoid leg kick or swing."
                                 "Squat not deep enough" -> "Go lower! Get thighs parallel to the ground."
                                 "Knees collapsing inward" -> "Keep your knees aligned with your toes."
@@ -432,11 +467,11 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                 
                 // Real-time angle computation simulations
                 if (exerciseType == "Plank") {
-                    // Random minor fluctuations
                     val randomScore = if (Math.random() > 0.10) (85..100).random() else (60..80).random()
                     _currentScore.value = randomScore
                     if (randomScore < 85) {
                         _currentFeedback.value = "Engage your core! Hips are sagging."
+                        _exerciseState.value = "ALIGNMENT BREAK"
                         if (Math.random() > 0.5) {
                             val previousSize = _mistakesList.value.size
                             _mistakesList.value = _mistakesList.value + "Hip sagging during plank"
@@ -445,6 +480,7 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                             }
                         }
                     } else {
+                        _exerciseState.value = "HOLDING"
                         _currentFeedback.value = "Great plank form! Hold it steady."
                     }
                 }
@@ -458,6 +494,7 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         mistake: String?,
         feedback: String,
         isRepCompleted: Boolean,
+        state: String = "READY",
         skeleton: PoseSkeleton? = null
     ) {
         _currentScore.value = score
@@ -466,19 +503,21 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         if (skeleton != null && _currentExercise.value == "Pull-up") {
             val metrics = pullUpBiomechanics.processFrame(skeleton)
             _pullUpMetrics.value = metrics
+            _exerciseState.value = metrics.phase
             
-            // Sync with old rep counter to avoid breaking gamification logic
+            // Sync with rep counter
             if (metrics.repCount > _repCount.value) {
-                val repScore = if (metrics.lastRep?.chinVerdict == "CHIN ABOVE BAR") 100 
-                               else if (metrics.lastRep?.chinVerdict == "~ CHIN AT BAR") 85 
-                               else 60
-                
-                _repScores.value = _repScores.value + repScore
+                val added = metrics.repCount - _repCount.value
+                _repCount.value = metrics.repCount
+                val repScore = if (metrics.lastRep?.fullLockout == true) 98 else 85
+                for (i in 0 until added) {
+                    _repScores.value = _repScores.value + repScore
+                }
                 if (repScore >= 85) com.example.audio.DuoSoundPlayer.playCorrect()
                 else com.example.audio.DuoSoundPlayer.playMistake()
             }
-            _repCount.value = metrics.repCount
         } else {
+            _exerciseState.value = state
             if (isRepCompleted) {
                 _repCount.value += 1
                 _repScores.value = _repScores.value + score
@@ -515,7 +554,6 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         val avgScore = if (_repScores.value.isNotEmpty()) {
             _repScores.value.average().toInt()
         } else if (exercise == "Plank") {
-            // For plank, calculate based on overall score state
             if (mistakes > 0) (80..92).random() else (92..100).random()
         } else {
             0
@@ -530,22 +568,35 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         }
 
         // Gamification XP Formula:
-        // Base XP: 20 XP for session completion
-        // Rep XP: 5 XP per correct rep (>80 form score), 2 XP per lower-quality rep
-        // Plank XP: 1 XP per second held with good form
         var xpEarned = 20
         if (exercise == "Plank") {
-            xpEarned += reps // seconds held with good form
+            xpEarned += reps
         } else {
             _repScores.value.forEach { score ->
                 xpEarned += if (score >= 80) 5 else 2
             }
         }
 
-        // Reward extra XP for High Form Quality (Form Master bonus)
         if (avgScore >= 90 && reps >= 5) {
-            xpEarned += 30 // 30 XP bonus
+            xpEarned += 30
         }
+
+        // Check if Personal Best
+        val previousBest = allSessions.value
+            .filter { it.exerciseType == exercise }
+            .maxOfOrNull { it.totalReps } ?: 0
+        _isPersonalBest.value = reps > 0 && reps > previousBest
+
+        _lastSessionRepScores.value = _repScores.value
+        _lastSessionMistakes.value = _mistakesList.value
+
+        val kcal = if (exercise == "Pull-up") {
+            if (_pullUpMetrics.value.totalKcal > 0.05) _pullUpMetrics.value.totalKcal else reps * 0.55
+        } else {
+            reps * 0.45
+        }
+        _lastSessionCalories.value = kcal
+        _lastSessionPeakPower.value = _pullUpMetrics.value.peakPowerW
 
         val session = WorkoutSession(
             exerciseType = exercise,
