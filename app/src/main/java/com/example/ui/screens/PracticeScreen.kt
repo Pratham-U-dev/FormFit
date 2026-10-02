@@ -3,19 +3,26 @@ package com.example.ui.screens
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.net.Uri
 import android.util.Log
+import android.view.View
 import android.view.ViewGroup
+import android.webkit.WebView
+import android.widget.VideoView
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
@@ -26,8 +33,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FlipCameraAndroid
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.VideogameAsset
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -77,6 +90,7 @@ fun PracticeScreen(
     val repCount by viewModel.repCount.collectAsState()
     val pullUpMetrics by viewModel.pullUpMetrics.collectAsState()
     val exerciseState by viewModel.exerciseState.collectAsState()
+    val targetReps by viewModel.targetReps.collectAsState()
     val timerSeconds by viewModel.sessionSeconds.collectAsState()
     val feedback by viewModel.currentFeedback.collectAsState()
     val formScore by viewModel.currentScore.collectAsState()
@@ -84,6 +98,15 @@ fun PracticeScreen(
     val mistakes by viewModel.mistakesList.collectAsState()
 
     val cameraPermissionState = rememberPermissionState(permission = Manifest.permission.CAMERA)
+
+    // Auto-switch to workout complete when user hits target repeats during live camera workout
+    LaunchedEffect(repCount, pullUpMetrics.repCount, targetReps, isVirtual) {
+        val currentReps = if (exerciseType == "Pull-up") pullUpMetrics.repCount else repCount
+        if (!isVirtual && targetReps > 0 && currentReps >= targetReps) {
+            viewModel.stopAndSaveWorkout()
+            onWorkoutFinished()
+        }
+    }
 
     Column(
         modifier = modifier
@@ -102,13 +125,13 @@ fun PracticeScreen(
         ) {
             Column {
                 Text(
-                    text = "TRAINING: ${exerciseType.uppercase()}",
+                    text = if (isVirtual) "INFO & GUIDE" else "TRAINING: ${exerciseType.uppercase()}",
                     color = DuoInk,
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 18.sp
                 )
                 Text(
-                    text = if (isVirtual) "Virtual practice sandbox" else "Real-time pose analysis",
+                    text = if (isVirtual) "Exercise Guide & Form" else "Real-time pose analysis",
                     color = DuoInkMuted,
                     fontSize = 12.sp
                 )
@@ -132,7 +155,7 @@ fun PracticeScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Default.VideogameAsset,
-                        contentDescription = "Virtual Mode",
+                        contentDescription = "Info & Guide",
                         tint = if (isVirtual) Color.White else DuoInkMuted,
                         modifier = Modifier.size(20.dp)
                     )
@@ -174,7 +197,20 @@ fun PracticeScreen(
         ) {
             if (isVirtual) {
                 // RENDER EXERCISE INFO SCREEN
-                ExerciseInfoView(exerciseType = exerciseType, repCount = repCount, exerciseState = exerciseState)
+                ExerciseInfoView(
+                    exerciseType = exerciseType,
+                    targetReps = targetReps,
+                    onIncrementTarget = { viewModel.incrementTargetReps() },
+                    onDecrementTarget = { viewModel.decrementTargetReps() },
+                    onSelectPreset = { count -> viewModel.setTargetReps(count) },
+                    onStartCameraWorkout = {
+                        viewModel.setVirtualCoachMode(false)
+                        if (!cameraPermissionState.status.isGranted) {
+                            cameraPermissionState.launchPermissionRequest()
+                        }
+                    },
+                    exerciseState = exerciseState
+                )
             } else {
                 // RENDER CAMERAX PREVIEW OR PERMISSION REQUEST
                 if (cameraPermissionState.status.isGranted) {
@@ -186,7 +222,7 @@ fun PracticeScreen(
                             }
                         )
                         if (exerciseType == "Pull-up") {
-                            PullUpDashboardHUD(pullUpMetrics)
+                            PullUpDashboardHUD(pullUpMetrics, targetReps)
                         } else {
                             // Live In-Camera Overlay for Reps, State and Feedback
                             Column(
@@ -197,7 +233,7 @@ fun PracticeScreen(
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Box(modifier = Modifier.background(DuoSurface1, RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 6.dp)) {
                                         Text(
-                                            text = if (exerciseType == "Plank") "HOLD: ${repCount}s" else "REPS: $repCount",
+                                            text = if (exerciseType == "Plank") "HOLD: ${repCount}s / ${targetReps}s" else "REPS: $repCount / $targetReps",
                                             color = DuoYellow,
                                             fontSize = 20.sp,
                                             fontWeight = FontWeight.ExtraBold
@@ -259,47 +295,110 @@ fun PracticeScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // FINISH WORKOUT BUTTONS
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            DuoButton(
-                onClick = { viewModel.abandonWorkout(); onWorkoutFinished() },
-                backgroundColor = Color.White,
-                shadowColor = DuoBorder,
-                textColor = DuoInkMuted,
-                modifier = Modifier.weight(0.4f).height(50.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
+        // BOTTOM ACTION BUTTONS
+        if (isVirtual) {
+            // Info & Guide Actions: purely for info, do not save fake session
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    "ABANDON",
-                    color = DuoInkMuted,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 14.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                DuoButton(
+                    onClick = { viewModel.abandonWorkout(); onWorkoutFinished() },
+                    backgroundColor = Color.White,
+                    shadowColor = DuoBorder,
+                    textColor = DuoInkMuted,
+                    modifier = Modifier.weight(0.35f).height(50.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        "EXIT GUIDE",
+                        color = DuoInkMuted,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                DuoButton(
+                    onClick = {
+                        viewModel.setVirtualCoachMode(false)
+                        if (!cameraPermissionState.status.isGranted) {
+                            cameraPermissionState.launchPermissionRequest()
+                        }
+                    },
+                    backgroundColor = DuoBlue,
+                    shadowColor = DuoBlueDark,
+                    modifier = Modifier.weight(0.65f).height(50.dp),
+                    testTag = "start_camera_workout_button",
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CameraAlt,
+                            contentDescription = "Start Camera",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "START WORKOUT ($targetReps REPS)",
+                            color = Color.White,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
             }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            DuoButton(
-                onClick = { viewModel.stopAndSaveWorkout(); onWorkoutFinished() },
-                backgroundColor = DuoGreen,
-                shadowColor = DuoGreenDark,
-                modifier = Modifier.weight(0.6f).height(50.dp),
-                testTag = "finish_workout_button",
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
+        } else {
+            // Live Camera Workout Actions: finish early or abandon
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    "FINISH WORKOUT",
-                    color = Color.White,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 14.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                DuoButton(
+                    onClick = { viewModel.abandonWorkout(); onWorkoutFinished() },
+                    backgroundColor = Color.White,
+                    shadowColor = DuoBorder,
+                    textColor = DuoInkMuted,
+                    modifier = Modifier.weight(0.4f).height(50.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        "ABANDON",
+                        color = DuoInkMuted,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                DuoButton(
+                    onClick = { viewModel.stopAndSaveWorkout(); onWorkoutFinished() },
+                    backgroundColor = DuoGreen,
+                    shadowColor = DuoGreenDark,
+                    modifier = Modifier.weight(0.6f).height(50.dp),
+                    testTag = "finish_workout_button",
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        "FINISH WORKOUT",
+                        color = Color.White,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
         }
     }
@@ -308,15 +407,29 @@ fun PracticeScreen(
 
 
 @Composable
-fun ExerciseInfoView(exerciseType: String, repCount: Int, exerciseState: String = "READY") {
+fun ExerciseInfoView(
+    exerciseType: String,
+    targetReps: Int,
+    onIncrementTarget: () -> Unit,
+    onDecrementTarget: () -> Unit,
+    onSelectPreset: (Int) -> Unit = {},
+    onStartCameraWorkout: () -> Unit = {},
+    exerciseState: String = "READY"
+) {
+    var selectedTab by remember { mutableStateOf("Animation") }
+    var selectedMuscleName by remember { mutableStateOf<String?>("Latissimus Dorsi (Lats)") }
+    var activeStepNumber by remember { mutableIntStateOf(1) }
+    var checklistState by remember { mutableStateOf(setOf(0, 1)) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.White)
-            .padding(16.dp),
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Title
+        // Title Header: Info & Guide
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -324,7 +437,7 @@ fun ExerciseInfoView(exerciseType: String, repCount: Int, exerciseState: String 
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = exerciseType.uppercase(),
+                    text = "INFO & GUIDE",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = DuoInk
@@ -335,95 +448,505 @@ fun ExerciseInfoView(exerciseType: String, repCount: Int, exerciseState: String 
                         .background(DuoBlue, RoundedCornerShape(8.dp))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
-                    Text("STATE: $exerciseState", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    Text(exerciseType.uppercase(), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                 }
             }
-            Text(
-                text = "SANDBOX",
-                color = DuoBlue,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
-            )
+        }
+        
+        Spacer(modifier = Modifier.height(14.dp))
+        
+        // THREE FUNCTIONAL TABS
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFFF1F3F5), RoundedCornerShape(20.dp))
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            listOf("Animation", "Muscle", "How to do").forEach { tab ->
+                val isSelected = selectedTab == tab
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (isSelected) DuoBlue else Color.Transparent)
+                        .clickable { selectedTab = tab }
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = tab,
+                        color = if (isSelected) Color.White else DuoInkMuted,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                }
+            }
         }
         
         Spacer(modifier = Modifier.height(16.dp))
         
-        // Illustration
+        // TAB 1: ANIMATION (pure animation playback without speed controls or labels)
+        when (selectedTab) {
+            "Animation" -> {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(320.dp)
+                            .background(Color.White, RoundedCornerShape(16.dp))
+                            .border(1.5.dp, DuoBorder, RoundedCornerShape(16.dp))
+                            .clip(RoundedCornerShape(16.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (exerciseType == "Pull-up") {
+                            // User's attached animated MP4
+                            ChinupVideoPlayer(
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            val infiniteTransition = rememberInfiniteTransition(label = "ExerciseAnimation")
+                            val animatedOffset by infiniteTransition.animateFloat(
+                                initialValue = 18f,
+                                targetValue = -25f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(durationMillis = 2000, easing = FastOutSlowInEasing),
+                                    repeatMode = RepeatMode.Reverse
+                                ),
+                                label = "ExerciseOffset"
+                            )
+                            ExerciseSkeletonDiagram(exerciseType = exerciseType, offset = animatedOffset)
+                        }
+                    }
+                }
+            }
+
+            // TAB 2: MUSCLE ANATOMY
+            "Muscle" -> {
+                val muscles = when (exerciseType) {
+                    "Pull-up" -> listOf(
+                        MuscleData("Latissimus Dorsi (Lats)", "Prime Mover · Shoulder Adduction & Downward Pull", 95, DuoGreen, "Concentric & Eccentric", "Drive your elbows down into back pockets rather than pulling with forearms."),
+                        MuscleData("Biceps Brachii", "Synergist · Elbow Flexion & Pull Strength", 88, DuoBlue, "Concentric Flexion", "Supinated or neutral grips increase bicep load; maintain forearm alignment."),
+                        MuscleData("Forearms & Grip", "Bar Suspension · Isometric Lock", 82, DuoOrange, "Isometric Hold", "Wrap thumbs completely around the bar to maximize grip endurance."),
+                        MuscleData("Rhomboids & Traps", "Scapular Retraction & Depression", 78, DuoYellow, "Isometric Retraction", "Pack your shoulder blades down and back before beginning each pull."),
+                        MuscleData("Core & Abdominals", "Anti-Extension & Strict Form", 65, DuoInkMuted, "Isometric Stabilization", "Brace your core and cross ankles to eliminate momentum and kipping.")
+                    )
+                    "Squat" -> listOf(
+                        MuscleData("Quadriceps", "Prime Mover · Knee Extension", 95, DuoGreen, "Concentric & Eccentric", "Push the floor away through mid-foot and maintain knee alignment over toes."),
+                        MuscleData("Gluteus Maximus", "Hip Extension & Lockout Drive", 90, DuoBlue, "Concentric Extension", "Squeeze glutes at top lockout and maintain hip depth below parallel."),
+                        MuscleData("Hamstrings", "Hip Hinge Stability & Knee Protection", 75, DuoYellow, "Isometric Control", "Engage hamstrings during descent to decelerate hips smoothly."),
+                        MuscleData("Core & Erectors", "Spinal Neutrality & Torso Uprightness", 70, DuoInkMuted, "Isometric Bracing", "Inhale and brace intra-abdominal pressure to protect lumbar spine.")
+                    )
+                    "Push-up" -> listOf(
+                        MuscleData("Pectoralis Major", "Prime Mover · Horizontal Adduction", 95, DuoGreen, "Concentric Press", "Flare elbows no more than 45° to protect rotator cuff and isolate chest."),
+                        MuscleData("Triceps Brachii", "Elbow Lockout & Pressing Power", 88, DuoBlue, "Concentric Extension", "Lock elbows cleanly at top without hyper-extending joints."),
+                        MuscleData("Anterior Deltoid", "Shoulder Flexion & Descent Control", 80, DuoOrange, "Concentric Drive", "Keep shoulders depressed away from neck throughout the motion."),
+                        MuscleData("Core & Abdominals", "Anti-Extension Plank Rigidity", 75, DuoInkMuted, "Isometric Hold", "Do not allow hips to sag or hike; maintain straight head-to-heel line.")
+                    )
+                    else -> listOf(
+                        MuscleData("Transverse Abdominis", "Deep Core Compression", 96, DuoGreen, "Isometric Bracing", "Draw navel toward spine while maintaining steady nasal breathing."),
+                        MuscleData("Rectus Abdominis", "Anti-Extension & Pelvic Stability", 90, DuoBlue, "Isometric Hold", "Maintain slight posterior pelvic tilt to engage rectus abdominis fully."),
+                        MuscleData("Internal & External Obliques", "Lateral & Rotational Control", 85, DuoYellow, "Isometric Hold", "Resist torso twisting or hip swaying."),
+                        MuscleData("Glutes & Quads", "Lower Body Tension", 72, DuoInkMuted, "Isometric Tension", "Squeeze quads and glutes to lock pelvis in neutral posture.")
+                    )
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFFF8FAFC), RoundedCornerShape(16.dp))
+                        .border(1.5.dp, DuoBorder, RoundedCornerShape(16.dp))
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "TARGETED MUSCLE GROUPS (TAP TO INSPECT)",
+                        color = DuoInk,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 11.sp
+                    )
+
+                    muscles.forEach { muscle ->
+                        val isSelected = selectedMuscleName == muscle.name
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) Color(0xFFF1F5F9) else Color.White)
+                                .border(1.dp, if (isSelected) DuoBlue else DuoBorder, RoundedCornerShape(10.dp))
+                                .clickable {
+                                    selectedMuscleName = if (isSelected) null else muscle.name
+                                }
+                                .padding(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(text = muscle.name, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = DuoInk)
+                                Text(text = "${muscle.percentage}% EMG", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, color = muscle.color)
+                            }
+                            Text(text = muscle.role, fontSize = 11.sp, color = DuoInkMuted)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            LinearProgressIndicator(
+                                progress = { muscle.percentage / 100f },
+                                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                                color = muscle.color,
+                                trackColor = Color(0xFFE2E8F0)
+                            )
+
+                            if (isSelected) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(Color.White, RoundedCornerShape(8.dp))
+                                        .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
+                                        .padding(8.dp)
+                                ) {
+                                    Column {
+                                        Text(text = "Style: ${muscle.contraction}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = DuoBlue)
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(text = "Pro Tip: ${muscle.tip}", fontSize = 11.sp, color = DuoInk, lineHeight = 14.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // TAB 3: HOW TO DO & CHECKLIST
+            "How to do" -> {
+                val steps = when (exerciseType) {
+                    "Pull-up" -> listOf(
+                        "1" to ("Grip & Setup" to "Grip the bar slightly wider than shoulder width with an overhand (pronated) grip. Wrap thumbs securely around the bar."),
+                        "2" to ("Active Dead Hang" to "Engage back by depressing shoulders away from ears. Pack scapulae, cross ankles, and brace core."),
+                        "3" to ("Concentric Pull" to "Drive elbows down and back toward your ribs. Lead with chest, avoiding craning or throwing neck forward."),
+                        "4" to ("Apex Chin Clearance" to "Pull until chin clears horizontally above bar level. Squeeze lats hard for a brief 0.5s apex hold."),
+                        "5" to ("Controlled 2-3s Descent" to "Lower smoothly under muscular control until arms achieve complete elbow lockout at full dead hang.")
+                    )
+                    "Squat" -> listOf(
+                        "1" to ("Foot Stance" to "Feet shoulder-width apart, toes pointed 15–30 degrees outward. Chest proud, core engaged."),
+                        "2" to ("Hip Hinge" to "Break at hips and knees simultaneously. Push knees outward in line with your toes."),
+                        "3" to ("Depth" to "Descend until hip crease is below the top of knees (parallel or deeper). Keep torso upright."),
+                        "4" to ("Drive Up" to "Drive through full foot to stand up. Squeeze glutes and extend hips fully at the top.")
+                    )
+                    "Push-up" -> listOf(
+                        "1" to ("Hand Placement" to "Hands slightly wider than shoulders, fingers spread. Body forms a rigid straight plank line."),
+                        "2" to ("Descent" to "Lower chest toward the ground by bending elbows at a 45-degree angle to your torso."),
+                        "3" to ("Bottom Depth" to "Descend until chest is about 1–2 inches off the ground without allowing hips to sag."),
+                        "4" to ("Concentric Press" to "Press floor away vigorously to return to full elbow lockout at top of plank.")
+                    )
+                    else -> listOf(
+                        "1" to ("Elbow Alignment" to "Place elbows directly below shoulders. Forearms parallel or hands clasped."),
+                        "2" to ("Spine Neutrality" to "Form a straight line from heels to ears. Tuck pelvis slightly to engage lower abs."),
+                        "3" to ("Bracing" to "Squeeze quads, glutes, and abdominals simultaneously. Breathe steadily through nose.")
+                    )
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFFF8FAFC), RoundedCornerShape(16.dp))
+                        .border(1.5.dp, DuoBorder, RoundedCornerShape(16.dp))
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "STEP-BY-STEP TECHNIQUE GUIDE",
+                        color = DuoInk,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 11.sp
+                    )
+
+                    steps.forEachIndexed { index, (stepNum, pair) ->
+                        val (title, desc) = pair
+                        val isStepActive = activeStepNumber == index + 1
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isStepActive) Color(0xFFEFF6FF) else Color.White)
+                                .border(1.dp, if (isStepActive) DuoBlue else DuoBorder, RoundedCornerShape(8.dp))
+                                .clickable { activeStepNumber = index + 1 }
+                                .padding(10.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .background(if (isStepActive) DuoBlue else DuoSurface1, RoundedCornerShape(6.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = stepNum,
+                                        color = if (isStepActive) Color.White else DuoInk,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(text = title, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = DuoInk)
+                            }
+                            if (isStepActive) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(text = desc, fontSize = 11.sp, color = DuoInkMuted, lineHeight = 15.sp)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = "FORM READINESS CHECKLIST",
+                        color = DuoInk,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 11.sp
+                    )
+
+                    val checklist = listOf(
+                        "Overhand grip set outside shoulder-width",
+                        "Shoulders packed down (anti-shrug)",
+                        "Core braced & legs still (zero kipping swing)",
+                        "Full ROM: Chin over bar to complete dead hang"
+                    )
+
+                    checklist.forEachIndexed { idx, item ->
+                        val isChecked = checklistState.contains(idx)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.White)
+                                .border(1.dp, DuoBorder, RoundedCornerShape(8.dp))
+                                .clickable {
+                                    checklistState = if (isChecked) checklistState - idx else checklistState + idx
+                                }
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .background(if (isChecked) DuoGreen else Color(0xFFE2E8F0), RoundedCornerShape(4.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isChecked) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Checked",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = item,
+                                fontSize = 11.sp,
+                                color = if (isChecked) DuoInk else DuoInkMuted,
+                                fontWeight = if (isChecked) FontWeight.SemiBold else FontWeight.Normal
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(20.dp))
+        
+        // TARGET REPEATS CARD (SET BY USER)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFFF8FAFC), RoundedCornerShape(14.dp))
+                .border(1.5.dp, DuoBorder, RoundedCornerShape(14.dp))
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "TARGET REPEATS",
+                        color = DuoBlue,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 16.sp
+                    )
+                    Text(
+                        text = "Auto-completes workout when reached",
+                        color = DuoInkMuted,
+                        fontSize = 11.sp
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .background(Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
+                            .size(36.dp)
+                            .clickable { onDecrementTarget() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("-", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = DuoInk)
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(
+                        text = "$targetReps",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = DuoInk
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Box(
+                        modifier = Modifier
+                            .background(Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
+                            .size(36.dp)
+                            .clickable { onIncrementTarget() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("+", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = DuoInk)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Quick Preset Selection Pills
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Presets:", fontSize = 11.sp, color = DuoInkMuted, fontWeight = FontWeight.Bold)
+                listOf(5, 8, 10, 12, 15, 20).forEach { preset ->
+                    val isSelectedPreset = targetReps == preset
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isSelectedPreset) DuoBlue else Color.White)
+                            .border(1.dp, if (isSelectedPreset) DuoBlue else DuoBorder, RoundedCornerShape(8.dp))
+                            .clickable { onSelectPreset(preset) }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "$preset",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSelectedPreset) Color.White else DuoInk
+                        )
+                    }
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Guidance Callout
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(200.dp)
-                .background(Color(0xFFF5F9FF), RoundedCornerShape(16.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.pullup_illustration_1789326142612), // Placeholder generated image
-                contentDescription = "Exercise Illustration",
-                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)),
-                contentScale = ContentScale.Crop
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        // Toggles
-        Row(
-            modifier = Modifier
-                .background(Color(0xFFF1F3F5), RoundedCornerShape(20.dp))
-                .padding(4.dp)
-        ) {
-            Box(modifier = Modifier.background(DuoBlue, RoundedCornerShape(16.dp)).padding(horizontal = 16.dp, vertical = 8.dp)) {
-                Text("Animation", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-            }
-            Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                Text("Muscle", color = DuoInkMuted, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-            }
-            Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                Text("How to do", color = DuoInkMuted, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        // Repeats
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .background(Color(0xFFEBF5FF), RoundedCornerShape(12.dp))
+                .padding(12.dp)
         ) {
             Text(
-                text = "REPEATS",
+                text = "💡 Tap 'START WORKOUT' below to begin your camera workout with real-time pose analysis!",
                 color = DuoBlue,
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 18.sp
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.background(Color(0xFFF1F3F5), RoundedCornerShape(8.dp)).size(32.dp), contentAlignment = Alignment.Center) { Text("-", fontWeight = FontWeight.Bold) }
-                Spacer(modifier = Modifier.width(16.dp))
-                Text("$repCount", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = DuoInk)
-                Spacer(modifier = Modifier.width(16.dp))
-                Box(modifier = Modifier.background(Color(0xFFF1F3F5), RoundedCornerShape(8.dp)).size(32.dp), contentAlignment = Alignment.Center) { Text("+", fontWeight = FontWeight.Bold) }
+        }
+    }
+}
+
+data class MuscleData(
+    val name: String,
+    val role: String,
+    val percentage: Int,
+    val color: Color,
+    val contraction: String,
+    val tip: String
+)
+
+@Composable
+fun ExerciseSkeletonDiagram(exerciseType: String, offset: Float) {
+    Canvas(modifier = Modifier.fillMaxSize().padding(32.dp)) {
+        val centerX = size.width / 2f
+        val centerY = size.height / 2f + offset * 1.5f
+        // Head
+        drawCircle(color = Color(0xFF334155), radius = 18.dp.toPx(), center = Offset(centerX, centerY - 60f))
+        // Spine
+        drawLine(color = Color(0xFF334155), start = Offset(centerX, centerY - 42f), end = Offset(centerX, centerY + 50f), strokeWidth = 8f)
+        // Arms
+        drawLine(color = Color(0xFF3B82F6), start = Offset(centerX, centerY - 30f), end = Offset(centerX - 40f, centerY - 10f), strokeWidth = 8f)
+        drawLine(color = Color(0xFF3B82F6), start = Offset(centerX, centerY - 30f), end = Offset(centerX + 40f, centerY - 10f), strokeWidth = 8f)
+        // Legs
+        drawLine(color = Color(0xFF10B981), start = Offset(centerX, centerY + 50f), end = Offset(centerX - 30f, centerY + 120f), strokeWidth = 8f)
+        drawLine(color = Color(0xFF10B981), start = Offset(centerX, centerY + 50f), end = Offset(centerX + 30f, centerY + 120f), strokeWidth = 8f)
+    }
+}
+
+@Composable
+fun ChinupVideoPlayer(
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val videoUri = remember {
+        Uri.parse("android.resource://${context.packageName}/${R.raw.chinup_animation}")
+    }
+    var activeVideoView by remember { mutableStateOf<VideoView?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            try {
+                activeVideoView?.stopPlayback()
+            } catch (e: Exception) {
+                // Ignore
             }
         }
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        // Instructions
-        Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
-            Text(
-                text = "INSTRUCTIONS",
-                color = DuoBlue,
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 18.sp
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Start in a proper position. Lower your body under control, then push or pull back to the starting position and repeat the exercise. Please remember to keep proper form during this exercise.",
-                color = DuoInk,
-                fontSize = 14.sp,
-                lineHeight = 20.sp
-            )
-        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.White),
+        contentAlignment = Alignment.Center
+    ) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { ctx ->
+                VideoView(ctx).apply {
+                    activeVideoView = this
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    setVideoURI(videoUri)
+                    setOnPreparedListener { mp ->
+                        mp.isLooping = true
+                        mp.setVolume(0f, 0f) // Silent animation loop
+                        start()
+                    }
+                    setOnCompletionListener {
+                        start()
+                    }
+                    setOnErrorListener { _, what, extra ->
+                        Log.e("ChinupVideoPlayer", "VideoView playback error: what=$what, extra=$extra")
+                        true
+                    }
+                }
+            },
+            update = { videoView ->
+                if (!videoView.isPlaying) {
+                    videoView.start()
+                }
+            }
+        )
     }
 }
 
@@ -668,7 +1191,7 @@ private fun parsePoseLandmarks(pose: com.google.mlkit.vision.pose.Pose): PoseSke
 }
 
 @Composable
-fun PullUpDashboardHUD(metrics: com.example.cv.PullUpMetrics) {
+fun PullUpDashboardHUD(metrics: com.example.cv.PullUpMetrics, targetReps: Int = 10) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -679,7 +1202,24 @@ fun PullUpDashboardHUD(metrics: com.example.cv.PullUpMetrics) {
         Column {
             Row(verticalAlignment = Alignment.Bottom) {
                 Text("${metrics.repCount}", fontSize = 64.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                Text(" REPS", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(bottom = 12.dp, start = 8.dp))
+                if (targetReps > 0) {
+                    Text(" / $targetReps", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.75f), modifier = Modifier.padding(bottom = 14.dp, start = 4.dp))
+                }
+                Text(" REPS", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(bottom = 14.dp, start = 8.dp))
+            }
+            
+            if (targetReps > 0) {
+                val progress = (metrics.repCount.toFloat() / targetReps).coerceIn(0f, 1f)
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .width(180.dp)
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp)),
+                    color = DuoGreen,
+                    trackColor = Color.White.copy(alpha = 0.3f)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
             }
             
             Box(modifier = Modifier

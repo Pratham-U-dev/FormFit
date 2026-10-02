@@ -209,6 +209,23 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
     private val _lastCompletedSession = MutableStateFlow<WorkoutSession?>(null)
     val lastCompletedSession = _lastCompletedSession.asStateFlow()
 
+    private val _targetReps = MutableStateFlow(10)
+    val targetReps = _targetReps.asStateFlow()
+
+    fun setTargetReps(count: Int) {
+        _targetReps.value = count.coerceIn(1, 100)
+    }
+
+    fun incrementTargetReps() {
+        _targetReps.value = (_targetReps.value + 1).coerceAtMost(100)
+        com.example.audio.DuoSoundPlayer.playClick()
+    }
+
+    fun decrementTargetReps() {
+        _targetReps.value = (_targetReps.value - 1).coerceAtLeast(1)
+        com.example.audio.DuoSoundPlayer.playClick()
+    }
+
     // Available achievements/badges
     val badgesList = listOf(
         Badge("first_workout", "First Steps", "Completed your very first FormFit workout!", "🔥", "Complete 1 workout"),
@@ -235,7 +252,6 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private var timerJob: Job? = null
-    private var simulationJob: Job? = null
 
     init {
         // Observe all sessions to unlock progressive badges
@@ -313,9 +329,33 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
 
     fun setVirtualCoachMode(enabled: Boolean) {
         _isVirtualCoachMode.value = enabled
-        if (_isActiveSession.value) {
-            // Restart practice jobs if exercise is running
-            startWorkout(_currentExercise.value)
+        if (!enabled) {
+            // Switching to actual camera workout: reset counters to start clean
+            _repCount.value = 0
+            _sessionSeconds.value = 0
+            _repScores.value = emptyList()
+            _mistakesList.value = emptyList()
+            _currentScore.value = 100
+            pullUpBiomechanics.reset()
+            _pullUpMetrics.value = PullUpMetrics()
+            _exerciseState.value = if (_currentExercise.value == "Pull-up") "HANG" else if (_currentExercise.value == "Plank") "HOLDING" else "STAND"
+
+            timerJob?.cancel()
+            timerJob = viewModelScope.launch {
+                while (_isActiveSession.value && !_isVirtualCoachMode.value) {
+                    delay(1000)
+                    _sessionSeconds.value += 1
+                    if (_currentExercise.value == "Plank" && _isActiveSession.value) {
+                        if (_currentScore.value >= 85) {
+                            _repCount.value += 1
+                        }
+                    }
+                }
+            }
+        } else {
+            // In virtual sandbox mode, ensure rep counter is 0 and timer stopped
+            timerJob?.cancel()
+            _repCount.value = 0
         }
     }
 
@@ -348,140 +388,16 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         }
 
         timerJob?.cancel()
-        timerJob = viewModelScope.launch {
-            while (_isActiveSession.value) {
-                delay(1000)
-                _sessionSeconds.value += 1
-                if (_currentExercise.value == "Plank" && _isActiveSession.value) {
-                    // Plank counts "reps" as seconds of perfect plank holding
-                    if (_currentScore.value >= 85) {
-                        _repCount.value += 1
-                    }
-                }
-            }
-        }
-
-        simulationJob?.cancel()
-        if (_isVirtualCoachMode.value) {
-            startVirtualCoachSimulation(exerciseType)
-        }
-    }
-
-    private fun startVirtualCoachSimulation(exerciseType: String) {
-        simulationJob = viewModelScope.launch {
-            var cycleProgress = 0f // 0f to 1f representation of rep completion
-            var goingDown = true
-            
-            while (_isActiveSession.value) {
-                delay(80) // ~12 FPS simulation update loop
-                
-                if (goingDown) {
-                    cycleProgress += 0.05f
-                    _exerciseState.value = when (exerciseType) {
-                        "Pull-up" -> if (cycleProgress > 0.8f) "TOP" else "PULL"
-                        "Squat" -> if (cycleProgress > 0.8f) "DEEP SQUAT" else "DESCENDING"
-                        "Push-up" -> if (cycleProgress > 0.8f) "BOTTOM" else "LOWERING"
-                        "Lunge" -> if (cycleProgress > 0.8f) "BOTTOM" else "LUNGING"
-                        else -> "HOLDING"
-                    }
-                    if (cycleProgress >= 1f) {
-                        cycleProgress = 1f
-                        goingDown = false
-                    }
-                } else {
-                    cycleProgress -= 0.05f
-                    _exerciseState.value = when (exerciseType) {
-                        "Pull-up" -> if (cycleProgress < 0.2f) "HANG" else "LOWER"
-                        "Squat" -> if (cycleProgress < 0.2f) "STAND" else "ASCENDING"
-                        "Push-up" -> if (cycleProgress < 0.2f) "PLANK" else "PUSHING UP"
-                        "Lunge" -> if (cycleProgress < 0.2f) "STAND" else "RETURNING"
-                        else -> "HOLDING"
-                    }
-                    if (cycleProgress <= 0f) {
-                        cycleProgress = 0f
-                        goingDown = true
-                        
-                        // Completed a full repetition!
-                        // Calculate score of the completed rep
-                        val formScore = if (Math.random() > 0.15) {
-                            (85..100).random()
-                        } else {
-                            (50..80).random() // Trigger random mistake rep sometimes
-                        }
-                        
-                        _currentScore.value = formScore
-                        _repScores.value = _repScores.value + formScore
-
-                        if (exerciseType != "Plank") {
+        if (!_isVirtualCoachMode.value) {
+            timerJob = viewModelScope.launch {
+                while (_isActiveSession.value && !_isVirtualCoachMode.value) {
+                    delay(1000)
+                    _sessionSeconds.value += 1
+                    if (_currentExercise.value == "Plank" && _isActiveSession.value) {
+                        // Plank counts "reps" as seconds of perfect plank holding
+                        if (_currentScore.value >= 85) {
                             _repCount.value += 1
                         }
-
-                        // Form Feedback & Mistake Categorization
-                        if (formScore >= 85) {
-                            com.example.audio.DuoSoundPlayer.playCorrect()
-                            _currentFeedback.value = when (exerciseType) {
-                                "Pull-up" -> "Full range of motion! Full lockout."
-                                "Squat" -> "Excellent squat depth! Perfect posture."
-                                "Push-up" -> "Perfect push-up! Keep it up."
-                                "Lunge" -> "Great alignment! Excellent balance."
-                                else -> "Keep holding! Body is straight."
-                            }
-                        } else {
-                            com.example.audio.DuoSoundPlayer.playMistake()
-                            val mistake = when (exerciseType) {
-                                "Pull-up" -> if (Math.random() > 0.5) {
-                                    "Pull-up depth insufficient"
-                                } else {
-                                    "Excessive body swing / kip"
-                                }
-                                "Squat" -> if (Math.random() > 0.5) {
-                                    "Squat not deep enough"
-                                } else {
-                                    "Knees collapsing inward"
-                                }
-                                "Push-up" -> if (Math.random() > 0.5) {
-                                    "Push-up not deep enough"
-                                } else {
-                                    "Hip sagging"
-                                }
-                                "Lunge" -> "Incorrect lunge knee alignment"
-                                "Plank" -> "Hip sagging during plank"
-                                else -> "Incorrect posture"
-                            }
-                            
-                            _mistakesList.value = _mistakesList.value + mistake
-                            _currentFeedback.value = when (mistake) {
-                                "Pull-up depth insufficient" -> "Pull higher! Aim for full range of motion."
-                                "Excessive body swing / kip" -> "Keep body quiet! Avoid leg kick or swing."
-                                "Squat not deep enough" -> "Go lower! Get thighs parallel to the ground."
-                                "Knees collapsing inward" -> "Keep your knees aligned with your toes."
-                                "Push-up not deep enough" -> "Chest closer to the ground!"
-                                "Hip sagging" -> "Engage your core to keep hips level."
-                                "Incorrect lunge knee alignment" -> "Don't let front knee pass your toes."
-                                "Hip sagging during plank" -> "Lift your hips up. Keep core engaged."
-                                else -> "Correct your form!"
-                            }
-                        }
-                    }
-                }
-                
-                // Real-time angle computation simulations
-                if (exerciseType == "Plank") {
-                    val randomScore = if (Math.random() > 0.10) (85..100).random() else (60..80).random()
-                    _currentScore.value = randomScore
-                    if (randomScore < 85) {
-                        _currentFeedback.value = "Engage your core! Hips are sagging."
-                        _exerciseState.value = "ALIGNMENT BREAK"
-                        if (Math.random() > 0.5) {
-                            val previousSize = _mistakesList.value.size
-                            _mistakesList.value = _mistakesList.value + "Hip sagging during plank"
-                            if (_mistakesList.value.size > previousSize) {
-                                com.example.audio.DuoSoundPlayer.playMistake()
-                            }
-                        }
-                    } else {
-                        _exerciseState.value = "HOLDING"
-                        _currentFeedback.value = "Great plank form! Hold it steady."
                     }
                 }
             }
@@ -497,6 +413,9 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         state: String = "READY",
         skeleton: PoseSkeleton? = null
     ) {
+        // Virtual sandbox is purely for informational guide - never process camera or count reps
+        if (_isVirtualCoachMode.value) return
+
         _currentScore.value = score
         _currentFeedback.value = feedback
 
@@ -539,9 +458,16 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun stopAndSaveWorkout() {
+        if (_isVirtualCoachMode.value) {
+            // Virtual sandbox is purely for informational guide - do not log or count reps!
+            _isActiveSession.value = false
+            timerJob?.cancel()
+            _lastCompletedSession.value = null
+            return
+        }
+
         _isActiveSession.value = false
         timerJob?.cancel()
-        simulationJob?.cancel()
         
         com.example.audio.DuoSoundPlayer.playFanfare()
 
@@ -618,8 +544,9 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
 
     fun abandonWorkout() {
         _isActiveSession.value = false
+        _lastCompletedSession.value = null
+        _repCount.value = 0
         timerJob?.cancel()
-        simulationJob?.cancel()
     }
 
     fun resetAllData() {
@@ -633,7 +560,6 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
     override fun onCleared() {
         super.onCleared()
         timerJob?.cancel()
-        simulationJob?.cancel()
         database.close()
     }
 }

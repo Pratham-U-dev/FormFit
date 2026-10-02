@@ -329,13 +329,13 @@ fun ProfileScreen(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "Virtual Coach Simulation",
+                                text = "Info & Guide Mode",
                                 color = DuoInk,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp
                             )
                             Text(
-                                text = if (isVirtualCoachMode) "Simulated workout ON" else "Camera / Sim mode",
+                                text = if (isVirtualCoachMode) "Guide screen ON before workout" else "Camera / Guide mode",
                                 color = DuoInkMuted,
                                 fontSize = 11.sp
                             )
