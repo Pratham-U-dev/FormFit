@@ -172,7 +172,7 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
     private val _isActiveSession = MutableStateFlow(false)
     val isActiveSession = _isActiveSession.asStateFlow()
 
-    private val _currentExercise = MutableStateFlow("Squat")
+    private val _currentExercise = MutableStateFlow("Pull-up")
     val currentExercise = _currentExercise.asStateFlow()
 
     private val _repCount = MutableStateFlow(0)

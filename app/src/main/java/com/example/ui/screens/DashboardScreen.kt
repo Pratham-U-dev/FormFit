@@ -210,9 +210,7 @@ fun DashboardScreen(
         // WORKOUT MODULES
         val exercises = listOf(
             Triple("Pull-up", "Pull-up Biomechanics", "🧗"),
-            Triple("Squat", "Squat Training", "🏋️‍♂️"),
-            Triple("Push-up", "Push-up Core", "💪"),
-            Triple("Plank", "Plank Endurance", "🧘")
+            Triple("Push-up", "Push-up Core", "💪")
         )
 
         exercises.forEach { (type, title, emoji) ->
@@ -246,9 +244,7 @@ fun DashboardScreen(
                                 Text(
                                     text = when(type) {
                                         "Pull-up" -> "Track chin clearance, elbow lockout, and lat fatigue."
-                                        "Squat" -> "Perfect your lower body squat depth."
-                                        "Push-up" -> "Build standard chest and elbow posture."
-                                        else -> "Hold horizontal spine alignment."
+                                        else -> "Build standard chest and elbow posture."
                                     },
                                     color = DuoInkMuted,
                                     fontSize = 12.sp
@@ -273,6 +269,61 @@ fun DashboardScreen(
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
+                    }
+                }
+            }
+        }
+
+        // MORE EXERCISES COMING SOON CARD
+        item {
+            DuoCard(
+                modifier = Modifier.fillMaxWidth(),
+                backgroundColor = Color(0xFFF8FAFC),
+                borderColor = Color(0xFFE2E8F0)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Box(
+                            modifier = Modifier
+                                .size(54.dp)
+                                .background(Color(0xFFF1F5F9), shape = RoundedCornerShape(12.dp))
+                                .border(2.dp, Color(0xFFE2E8F0), shape = RoundedCornerShape(12.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("⏳", fontSize = 26.sp)
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text(
+                                text = "More Exercises Coming Soon",
+                                color = DuoInk,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 15.sp
+                            )
+                            Text(
+                                text = "Squats, Planks & new biomechanics models in development.",
+                                color = DuoInkMuted,
+                                fontSize = 11.5.sp
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .background(Color(0xFFEDE9FE), shape = RoundedCornerShape(8.dp))
+                            .border(1.dp, Color(0xFFDDD6FE), shape = RoundedCornerShape(8.dp))
+                            .padding(horizontal = 10.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = "SOON",
+                            color = Color(0xFF7C3AED),
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 11.sp
+                        )
                     }
                 }
             }

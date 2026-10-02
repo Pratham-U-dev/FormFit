@@ -1,5 +1,9 @@
 package com.example.ui.screens
 
+import android.net.Uri
+import android.util.Log
+import android.view.ViewGroup
+import android.widget.VideoView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,12 +21,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import com.example.R
 import com.example.data.UserBodyProfile
 import com.example.ui.components.DuoButton
 import com.example.ui.components.DuoCard
@@ -128,7 +135,16 @@ fun BodyMetricsScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // HUMAN BODY ANIMATION VIDEO PLAYER
+        HumanBodyVideoPlayer(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp)
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
 
         // HERO BIOMECHANICS SUMMARY CARD
         DuoCard(
@@ -176,25 +192,21 @@ fun BodyMetricsScreen(
                 HorizontalDivider(color = Color(0xFFF1F5F9))
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // 3 Key Physics Metrics Preview
+                // Active Exercises Lifted Mass Preview
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                        Text("PULL-UP", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = DuoInkMuted)
-                        Text(if (isMetric) "$pullUpMass kg" else "${(pullUpMass * 2.20462).roundToInt()} lbs", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = DuoInk, maxLines = 1)
-                        Text("95% BW", fontSize = 9.sp, color = DuoGreen)
+                        Text("PULL-UP LOAD", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = DuoInkMuted)
+                        Text(if (isMetric) "$pullUpMass kg" else "${(pullUpMass * 2.20462).roundToInt()} lbs", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = DuoInk, maxLines = 1)
+                        Text("95% Bodyweight Lifted", fontSize = 10.sp, color = DuoGreen, fontWeight = FontWeight.SemiBold)
                     }
+                    Box(modifier = Modifier.width(1.dp).height(40.dp).background(Color(0xFFE2E8F0)))
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                        Text("SQUAT", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = DuoInkMuted)
-                        Text(if (isMetric) "$squatMass kg" else "${(squatMass * 2.20462).roundToInt()} lbs", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = DuoInk, maxLines = 1)
-                        Text("88% BW", fontSize = 9.sp, color = DuoBlue)
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                        Text("PUSH-UP", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = DuoInkMuted)
-                        Text(if (isMetric) "$pushUpMass kg" else "${(pushUpMass * 2.20462).roundToInt()} lbs", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = DuoInk, maxLines = 1)
-                        Text("64% BW", fontSize = 9.sp, color = DuoOrange)
+                        Text("PUSH-UP LOAD", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = DuoInkMuted)
+                        Text(if (isMetric) "$pushUpMass kg" else "${(pushUpMass * 2.20462).roundToInt()} lbs", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = DuoInk, maxLines = 1)
+                        Text("64% Bodyweight Lifted", fontSize = 10.sp, color = DuoBlue, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -672,5 +684,67 @@ fun BodyMetricsScreen(
         }
 
         Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+@Composable
+fun HumanBodyVideoPlayer(
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val videoUri = remember {
+        Uri.parse("android.resource://${context.packageName}/${R.raw.summary_of_human_body}")
+    }
+    var activeVideoView by remember { mutableStateOf<VideoView?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            try {
+                activeVideoView?.stopPlayback()
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(220.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color(0xFFF8FAFC))
+            .border(1.5.dp, DuoBorder, RoundedCornerShape(16.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { ctx ->
+                VideoView(ctx).apply {
+                    activeVideoView = this
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    setVideoURI(videoUri)
+                    setOnPreparedListener { mp ->
+                        mp.isLooping = true
+                        mp.setVolume(0f, 0f) // Silent looping animation
+                        start()
+                    }
+                    setOnCompletionListener {
+                        start()
+                    }
+                    setOnErrorListener { _, what, extra ->
+                        Log.e("HumanBodyVideoPlayer", "VideoView playback error: what=$what, extra=$extra")
+                        true
+                    }
+                }
+            },
+            update = { videoView ->
+                if (!videoView.isPlaying) {
+                    videoView.start()
+                }
+            }
+        )
     }
 }
