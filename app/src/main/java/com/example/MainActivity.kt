@@ -8,10 +8,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccessibilityNew
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.outlined.AccessibilityNew
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.Leaderboard
 import androidx.compose.material.icons.outlined.Person
@@ -32,11 +34,11 @@ import com.example.ui.theme.DuoInkMuted
 import com.example.viewmodel.WorkoutViewModel
 
 enum class MainTab {
-    COACH, NUTRITION, LEADERBOARD, PROFILE
+    COACH, NUTRITION, LEADERBOARD, BODY
 }
 
 enum class ActiveScreen {
-    TABS, PRACTICE, SUMMARY
+    SPLASH, TABS, PRACTICE, SUMMARY, PROFILE
 }
 
 class MainActivity : ComponentActivity() {
@@ -55,7 +57,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun FormFitApp() {
     val viewModel: WorkoutViewModel = viewModel()
-    var activeScreen by remember { mutableStateOf(ActiveScreen.TABS) }
+    var activeScreen by remember { mutableStateOf(ActiveScreen.SPLASH) }
     var currentTab by remember { mutableStateOf(MainTab.COACH) }
 
     val needsDisplayNamePrompt by viewModel.needsDisplayNamePrompt.collectAsState()
@@ -137,9 +139,9 @@ fun FormFitApp() {
                     )
 
                     NavigationBarItem(
-                        selected = currentTab == MainTab.PROFILE,
-                        onClick = { currentTab = MainTab.PROFILE },
-                        label = { Text("Profile", maxLines = 1, softWrap = false, fontSize = 11.sp, overflow = TextOverflow.Ellipsis) },
+                        selected = currentTab == MainTab.BODY,
+                        onClick = { currentTab = MainTab.BODY },
+                        label = { Text("My Body", maxLines = 1, softWrap = false, fontSize = 11.sp, overflow = TextOverflow.Ellipsis) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = DuoGreen,
                             selectedTextColor = DuoGreen,
@@ -149,8 +151,8 @@ fun FormFitApp() {
                         ),
                         icon = {
                             Icon(
-                                imageVector = if (currentTab == MainTab.PROFILE) Icons.Default.Person else Icons.Outlined.Person,
-                                contentDescription = "Profile Tab",
+                                imageVector = if (currentTab == MainTab.BODY) Icons.Default.AccessibilityNew else Icons.Outlined.AccessibilityNew,
+                                contentDescription = "Body Metrics Tab",
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -160,6 +162,21 @@ fun FormFitApp() {
         }
     ) { innerPadding ->
         when (activeScreen) {
+            ActiveScreen.SPLASH -> {
+                SplashScreen(
+                    onTimeout = {
+                        activeScreen = ActiveScreen.TABS
+                    },
+                    modifier = Modifier.padding(innerPadding)
+                )
+            }
+            ActiveScreen.PROFILE -> {
+                ProfileScreen(
+                    viewModel = viewModel,
+                    onBack = { activeScreen = ActiveScreen.TABS },
+                    modifier = Modifier.padding(innerPadding)
+                )
+            }
             ActiveScreen.TABS -> {
                 when (currentTab) {
                     MainTab.COACH -> {
@@ -168,6 +185,9 @@ fun FormFitApp() {
                             onStartWorkout = { exerciseType ->
                                 viewModel.startWorkout(exerciseType)
                                 activeScreen = ActiveScreen.PRACTICE
+                            },
+                            onOpenProfile = {
+                                activeScreen = ActiveScreen.PROFILE
                             },
                             modifier = Modifier.padding(innerPadding)
                         )
@@ -184,8 +204,8 @@ fun FormFitApp() {
                             modifier = Modifier.padding(innerPadding)
                         )
                     }
-                    MainTab.PROFILE -> {
-                        ProfileScreen(
+                    MainTab.BODY -> {
+                        BodyMetricsScreen(
                             viewModel = viewModel,
                             modifier = Modifier.padding(innerPadding)
                         )

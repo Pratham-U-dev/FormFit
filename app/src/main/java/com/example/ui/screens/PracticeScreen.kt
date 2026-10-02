@@ -53,6 +53,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.clip
@@ -96,6 +97,10 @@ fun PracticeScreen(
     val formScore by viewModel.currentScore.collectAsState()
     val isVirtual by viewModel.isVirtualCoachMode.collectAsState()
     val mistakes by viewModel.mistakesList.collectAsState()
+    val liveSpeedLossPct by viewModel.liveSpeedLossPct.collectAsState()
+    val livePeakPowerW by viewModel.livePeakPowerW.collectAsState()
+    val liveVelocityMps by viewModel.liveVelocityMps.collectAsState()
+    val bodyProfile by viewModel.userBodyProfile.collectAsState()
 
     val cameraPermissionState = rememberPermissionState(permission = Manifest.permission.CAMERA)
 
@@ -217,14 +222,16 @@ fun PracticeScreen(
                     Box(modifier = Modifier.fillMaxSize()) {
                         CameraWithPoseOverlay(
                             exerciseType = exerciseType,
-                            onFrameAnalysis = { score, mistake, fb, rep, state, skeleton ->
-                                viewModel.processCameraFrameAnalysis(score, mistake, fb, rep, state, skeleton)
+                            userWeightKg = bodyProfile.weightKg,
+                            userHeightCm = bodyProfile.heightCm,
+                            onFrameAnalysis = { score, mistake, fb, rep, state, skeleton, vel, power, vbtLoss ->
+                                viewModel.processCameraFrameAnalysis(score, mistake, fb, rep, state, skeleton, vel, power, vbtLoss)
                             }
                         )
                         if (exerciseType == "Pull-up") {
                             PullUpDashboardHUD(pullUpMetrics, targetReps)
                         } else {
-                            // Live In-Camera Overlay for Reps, State and Feedback
+                            // Live In-Camera Overlay for Reps, State, VBT Telemetry and Feedback
                             Column(
                                 modifier = Modifier
                                     .align(Alignment.TopStart)
@@ -248,7 +255,20 @@ fun PracticeScreen(
                                         )
                                     }
                                 }
-                                Spacer(modifier = Modifier.height(8.dp))
+                                Spacer(modifier = Modifier.height(6.dp))
+                                if (exerciseType != "Plank") {
+                                    Box(
+                                        modifier = Modifier
+                                            .background(Color(0xCC000000), RoundedCornerShape(8.dp))
+                                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    ) {
+                                        Column {
+                                            Text("⚡ $liveSpeedLossPct % SPEED LOSS VS REP 1", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                            Text("🔥 $livePeakPowerW W PEAK POWER · ${String.format("%.2f", liveVelocityMps)} m/s", color = Color.White, fontSize = 11.sp)
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                }
                                 Box(modifier = Modifier.background(if (formScore < 80) Color(0xFFFFEBEE) else Color(0xFFE8F5E9), RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 6.dp)) {
                                     Text(
                                         text = feedback,
@@ -348,10 +368,12 @@ fun PracticeScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            "START WORKOUT ($targetReps REPS)",
+                            "START WORKOUT ($targetReps)",
                             color = Color.White,
                             fontWeight = FontWeight.ExtraBold,
-                            fontSize = 13.sp
+                            fontSize = 12.5.sp,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -763,52 +785,59 @@ fun ExerciseInfoView(
                 .fillMaxWidth()
                 .background(Color(0xFFF8FAFC), RoundedCornerShape(14.dp))
                 .border(1.5.dp, DuoBorder, RoundedCornerShape(14.dp))
-                .padding(16.dp)
+                .padding(14.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                     Text(
                         text = "TARGET REPEATS",
                         color = DuoBlue,
                         fontWeight = FontWeight.ExtraBold,
-                        fontSize = 16.sp
+                        fontSize = 15.sp,
+                        maxLines = 1
                     )
                     Text(
                         text = "Auto-completes workout when reached",
                         color = DuoInkMuted,
-                        fontSize = 11.sp
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.End
+                ) {
                     Box(
                         modifier = Modifier
                             .background(Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
-                            .size(36.dp)
+                            .size(34.dp)
                             .clickable { onDecrementTarget() },
                         contentAlignment = Alignment.Center
                     ) {
                         Text("-", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = DuoInk)
                     }
-                    Spacer(modifier = Modifier.width(16.dp))
                     Text(
                         text = "$targetReps",
-                        fontSize = 24.sp,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = DuoInk
+                        color = DuoInk,
+                        modifier = Modifier.padding(horizontal = 10.dp),
+                        maxLines = 1,
+                        softWrap = false
                     )
-                    Spacer(modifier = Modifier.width(16.dp))
                     Box(
                         modifier = Modifier
-                            .background(Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
-                            .size(36.dp)
+                            .background(DuoBlue, RoundedCornerShape(8.dp))
+                            .size(34.dp)
                             .clickable { onIncrementTarget() },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("+", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = DuoInk)
+                        Text("+", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = Color.White)
                     }
                 }
             }
@@ -818,7 +847,7 @@ fun ExerciseInfoView(
             // Quick Preset Selection Pills
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Presets:", fontSize = 11.sp, color = DuoInkMuted, fontWeight = FontWeight.Bold)
@@ -826,17 +855,20 @@ fun ExerciseInfoView(
                     val isSelectedPreset = targetReps == preset
                     Box(
                         modifier = Modifier
+                            .weight(1f)
                             .clip(RoundedCornerShape(8.dp))
                             .background(if (isSelectedPreset) DuoBlue else Color.White)
                             .border(1.dp, if (isSelectedPreset) DuoBlue else DuoBorder, RoundedCornerShape(8.dp))
                             .clickable { onSelectPreset(preset) }
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .padding(vertical = 6.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = "$preset",
-                            fontSize = 12.sp,
+                            fontSize = 11.5.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (isSelectedPreset) Color.White else DuoInk
+                            color = if (isSelectedPreset) Color.White else DuoInk,
+                            maxLines = 1
                         )
                     }
                 }
@@ -954,7 +986,9 @@ fun ChinupVideoPlayer(
 @Composable
 fun CameraWithPoseOverlay(
     exerciseType: String,
-    onFrameAnalysis: (Int, String?, String, Boolean, String, PoseSkeleton?) -> Unit
+    userWeightKg: Double = 75.0,
+    userHeightCm: Double = 175.0,
+    onFrameAnalysis: (Int, String?, String, Boolean, String, PoseSkeleton?, Double, Int, Int) -> Unit
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -965,7 +999,10 @@ fun CameraWithPoseOverlay(
     val previewView = remember(context) { PreviewView(context) }
 
     // Real-time local evaluation states
-    val evaluator = remember { ExerciseFormEvaluator() }
+    val evaluator = remember { ExerciseFormEvaluator(userWeightKg, userHeightCm) }
+    LaunchedEffect(userWeightKg, userHeightCm) {
+        evaluator.updateBodyParams(userWeightKg, userHeightCm)
+    }
     var currentSkeleton by remember { mutableStateOf<PoseSkeleton?>(null) }
     var currentResult by remember { mutableStateOf<EvaluationResult?>(null) }
 
@@ -1116,7 +1153,17 @@ fun CameraWithPoseOverlay(
                                     else -> EvaluationResult.idle("Active")
                                 }
                                 currentResult = result
-                                onFrameAnalysis(result.score, result.mistake, result.feedback, result.isRepCompleted, result.exerciseState, skeleton)
+                                onFrameAnalysis(
+                                    result.score,
+                                    result.mistake,
+                                    result.feedback,
+                                    result.isRepCompleted,
+                                    result.exerciseState,
+                                    skeleton,
+                                    result.velocityMps,
+                                    result.peakPowerW,
+                                    result.speedLossPct
+                                )
                             }
                         }
                     )

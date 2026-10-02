@@ -33,6 +33,20 @@ data class UserStats(
     val unlockedBadgesCsv: String = "" // e.g. "first_workout,streak_7,perfect_squats"
 )
 
+@Entity(tableName = "user_body_profile")
+data class UserBodyProfile(
+    @PrimaryKey val id: Int = 1,
+    val weightKg: Double = 75.0,
+    val heightCm: Double = 175.0,
+    val armLengthCm: Double = 65.0,
+    val age: Int = 25,
+    val gender: String = "Male", // "Male", "Female", "Other"
+    val fitnessLevel: String = "Intermediate", // "Beginner", "Intermediate", "Advanced", "Elite"
+    val trainingGoal: String = "Hypertrophy", // "Power", "Strength", "Hypertrophy", "Endurance"
+    val vbtCutoffPct: Int = 20, // 10%, 20%, 30%, 40%
+    val isMetric: Boolean = true
+)
+
 @Entity(tableName = "nutrition_logs")
 data class NutritionLog(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
@@ -97,9 +111,25 @@ interface NutritionDao {
     suspend fun deleteAllNutritionLogs()
 }
 
-@Database(entities = [WorkoutSession::class, UserStats::class, NutritionLog::class], version = 2, exportSchema = false)
+@Dao
+interface UserProfileDao {
+    @Query("SELECT * FROM user_body_profile WHERE id = 1 LIMIT 1")
+    fun getUserProfile(): Flow<UserBodyProfile?>
+
+    @Query("SELECT * FROM user_body_profile WHERE id = 1 LIMIT 1")
+    suspend fun getUserProfileDirect(): UserBodyProfile?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdateProfile(profile: UserBodyProfile)
+
+    @Query("DELETE FROM user_body_profile")
+    suspend fun deleteUserProfile()
+}
+
+@Database(entities = [WorkoutSession::class, UserStats::class, UserBodyProfile::class, NutritionLog::class], version = 3, exportSchema = false)
 abstract class FormFitDatabase : RoomDatabase() {
     abstract fun workoutDao(): WorkoutDao
     abstract fun userStatsDao(): UserStatsDao
+    abstract fun userProfileDao(): UserProfileDao
     abstract fun nutritionDao(): NutritionDao
 }

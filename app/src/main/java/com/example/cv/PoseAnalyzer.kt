@@ -1,7 +1,9 @@
 package com.example.cv
 
+import android.os.SystemClock
 import kotlin.math.abs
 import kotlin.math.atan2
+import kotlin.math.max
 
 data class LandmarkPoint(val x: Float, val y: Float, val confidence: Float)
 
@@ -36,18 +38,36 @@ object PoseGeometry {
     }
 }
 
-class ExerciseFormEvaluator {
-    
+class ExerciseFormEvaluator(
+    private var userWeightKg: Double = 75.0,
+    private var userHeightCm: Double = 175.0
+) {
+    private val G = 9.80665
+
+    // Kinematics & VBT tracking
+    private var lastTime = 0L
+    private val yHistory = mutableListOf<Float>()
+    private val timeHistory = mutableListOf<Long>()
+    private var currentVel = 0.0
+    private var prevVel = 0.0
+    private var currentAccel = 0.0
+    private var repPeakVel = 0.0
+    private var repPeakPower = 0.0
+    private var sessionPeakPower = 0.0
+    private var vRefRep1 = 0.0
+    private var completedReps = 0
+    private var lastRepSpeedLoss = 0
+
     // State machine trackers
-    private var squatState = "UP" // UP, DOWN
+    private var squatState = "UP" // UP, DOWN, ASCENDING
     private var minSquatAngle = 180.0
     private var squatDeepEnough = false
 
-    private var pushupState = "UP" // UP, DOWN
+    private var pushupState = "UP" // UP, DOWN, PRESSING
     private var minPushupAngle = 180.0
     private var pushupDeepEnough = false
 
-    private var lungeState = "UP" // UP, DOWN
+    private var lungeState = "UP" // UP, DOWN, STEPPING_UP
     private var minLungeAngle = 180.0
     private var lungeDeepEnough = false
 
@@ -56,7 +76,25 @@ class ExerciseFormEvaluator {
     private var minPullupElbowAngle = 180.0
     private var pullupFullRomReached = false
 
+    fun updateBodyParams(weightKg: Double, heightCm: Double) {
+        userWeightKg = weightKg.coerceIn(30.0, 250.0)
+        userHeightCm = heightCm.coerceIn(100.0, 250.0)
+    }
+
     fun reset() {
+        lastTime = 0L
+        yHistory.clear()
+        timeHistory.clear()
+        currentVel = 0.0
+        prevVel = 0.0
+        currentAccel = 0.0
+        repPeakVel = 0.0
+        repPeakPower = 0.0
+        sessionPeakPower = 0.0
+        vRefRep1 = 0.0
+        completedReps = 0
+        lastRepSpeedLoss = 0
+
         squatState = "UP"
         minSquatAngle = 180.0
         squatDeepEnough = false
@@ -74,10 +112,81 @@ class ExerciseFormEvaluator {
         pullupFullRomReached = false
     }
 
+    private fun updateKinematics(currentY: Float, liftedMassFrac: Double) {
+        val now = SystemClock.elapsedRealtime()
+        if (lastTime == 0L) {
+            lastTime = now
+            return
+        }
+        val dt = ((now - lastTime) / 1000.0).coerceIn(0.01, 0.25)
+        lastTime = now
+
+        yHistory.add(currentY)
+        timeHistory.add(now)
+        if (yHistory.size > 8) {
+            yHistory.removeAt(0)
+            timeHistory.removeAt(0)
+        }
+
+        if (yHistory.size >= 3) {
+            val yCurr = yHistory.takeLast(2).average().toFloat()
+            val yPrev = yHistory.take(2).average().toFloat()
+            val dtStep = ((now - timeHistory.first()) / 1000.0).coerceIn(0.03, 0.35)
+
+            // Normalize coordinate to physical meter scale based on user height
+            val normUnitsPerM = (0.50 / (userHeightCm / 175.0)).coerceIn(0.20, 0.85)
+            val deltaMeters = (yPrev - yCurr) / normUnitsPerM // Moving UP in screen is positive
+
+            val rawVel = deltaMeters / dtStep
+            prevVel = currentVel
+            currentVel = (0.60 * currentVel + 0.40 * rawVel)
+            if (abs(currentVel) < 0.03) currentVel = 0.0
+
+            currentAccel = (currentVel - prevVel) / dt
+        }
+
+        val liftedMassKg = userWeightKg * liftedMassFrac
+        val concentricVel = max(0.0, currentVel)
+        val forceN = liftedMassKg * (G + max(0.0, currentAccel))
+        val currentPower = if (concentricVel > 0.04) forceN * concentricVel else 0.0
+
+        if (currentPower > repPeakPower) {
+            repPeakPower = currentPower
+        }
+        if (currentPower > sessionPeakPower) {
+            sessionPeakPower = currentPower
+        }
+        if (concentricVel > repPeakVel) {
+            repPeakVel = concentricVel
+        }
+    }
+
+    private fun onRepFinished(): Pair<Int, Int> { // Returns (speedLossPct, peakPowerW)
+        completedReps++
+        val actualPeakVel = max(0.15, repPeakVel)
+        if (vRefRep1 == 0.0 || completedReps == 1) {
+            vRefRep1 = actualPeakVel
+        }
+
+        val speedLoss = if (vRefRep1 > 0.05) {
+            max(0, ((1.0 - (actualPeakVel / vRefRep1)) * 100.0).toInt()).coerceIn(0, 95)
+        } else 0
+        lastRepSpeedLoss = speedLoss
+
+        val repPower = if (repPeakPower > 0.0) repPeakPower else (userWeightKg * 0.85 * G * actualPeakVel)
+        
+        repPeakVel = 0.0
+        repPeakPower = 0.0
+        return Pair(speedLoss, repPower.toInt())
+    }
+
     fun evaluateSquat(skeleton: PoseSkeleton): EvaluationResult {
         val hip = skeleton.hipLeft ?: skeleton.hipRight ?: return EvaluationResult.idle("Stand fully in frame")
         val knee = skeleton.kneeLeft ?: skeleton.kneeRight ?: return EvaluationResult.idle("Position hips and knees in frame")
         val ankle = skeleton.ankleLeft ?: skeleton.ankleRight ?: return EvaluationResult.idle("Ensure ankles are visible")
+
+        val hipY = hip.y
+        updateKinematics(hipY, liftedMassFrac = 0.88)
 
         val kneeAngle = PoseGeometry.calculateAngle(hip, knee, ankle)
         var feedback = "Stand straight, then squat down"
@@ -89,7 +198,7 @@ class ExerciseFormEvaluator {
             minSquatAngle = kneeAngle
         }
 
-        // Deep squat check
+        // Deep squat check (parallel or below: <= 100°)
         if (kneeAngle <= 100.0) {
             squatDeepEnough = true
         }
@@ -115,24 +224,29 @@ class ExerciseFormEvaluator {
                 feedback = "Going down... keep chest high!"
             }
         } else if (squatState == "DOWN") {
-            if (kneeAngle > 150.0) {
+            if (kneeAngle > 145.0) {
                 // User stood back up! Rep complete
                 squatState = "UP"
                 isRepCompleted = true
+                onRepFinished()
                 
                 if (!squatDeepEnough && minSquatAngle > 110.0) {
                     mistake = "Squat not deep enough"
                     feedback = "Squat deeper! Thighs parallel to floor."
                     score = 70
                 } else {
-                    feedback = "Excellent squat depth!"
+                    feedback = "Excellent explosive squat!"
                     score = if (mistake != null) 75 else 95
                 }
                 minSquatAngle = 180.0
             } else {
-                feedback = if (squatDeepEnough) "Good depth! Now push up." else "Go lower... keep hips back."
+                feedback = if (squatDeepEnough) "Good depth! Drive up explosively." else "Go lower... keep hips back."
             }
         }
+
+        val liveSpeedLoss = if (vRefRep1 > 0.05 && squatState == "DOWN") {
+            max(0, ((1.0 - (repPeakVel / vRefRep1)) * 100.0).toInt())
+        } else lastRepSpeedLoss
 
         return EvaluationResult(
             score = score,
@@ -140,7 +254,10 @@ class ExerciseFormEvaluator {
             feedback = feedback,
             isRepCompleted = isRepCompleted,
             angleValue = kneeAngle,
-            exerciseState = if (squatState == "UP") "STAND" else if (squatDeepEnough) "DEEP SQUAT" else "DESCENDING"
+            exerciseState = if (squatState == "UP") "STAND" else if (squatDeepEnough) "DEEP SQUAT" else "DESCENDING",
+            velocityMps = max(0.0, currentVel),
+            peakPowerW = sessionPeakPower.toInt(),
+            speedLossPct = liveSpeedLoss
         )
     }
 
@@ -148,6 +265,9 @@ class ExerciseFormEvaluator {
         val shoulder = skeleton.shoulderLeft ?: skeleton.shoulderRight ?: return EvaluationResult.idle("Ensure shoulders are in frame")
         val elbow = skeleton.elbowLeft ?: skeleton.elbowRight ?: return EvaluationResult.idle("Position elbows in frame")
         val wrist = skeleton.wristLeft ?: skeleton.wristRight ?: return EvaluationResult.idle("Ensure wrists are visible")
+
+        val shoulderY = shoulder.y
+        updateKinematics(shoulderY, liftedMassFrac = 0.64)
 
         val elbowAngle = PoseGeometry.calculateAngle(shoulder, elbow, wrist)
         var feedback = "Hold plank, then lower chest"
@@ -181,23 +301,28 @@ class ExerciseFormEvaluator {
                 feedback = "Lowering... keep body straight!"
             }
         } else if (pushupState == "DOWN") {
-            if (elbowAngle > 150.0) {
+            if (elbowAngle > 145.0) {
                 pushupState = "UP"
                 isRepCompleted = true
+                onRepFinished()
                 
                 if (!pushupDeepEnough && minPushupAngle > 110.0) {
                     mistake = "Push-up not deep enough"
                     feedback = "Lower more! Aim for 90-degree elbows."
                     score = 70
                 } else {
-                    feedback = "Great push-up!"
+                    feedback = "Great explosive push-up!"
                     score = if (mistake != null) 70 else 98
                 }
                 minPushupAngle = 180.0
             } else {
-                feedback = if (pushupDeepEnough) "Good depth! Push up." else "Go lower... chest closer to floor."
+                feedback = if (pushupDeepEnough) "Good depth! Press up powerfully." else "Go lower... chest closer to floor."
             }
         }
+
+        val liveSpeedLoss = if (vRefRep1 > 0.05 && pushupState == "DOWN") {
+            max(0, ((1.0 - (repPeakVel / vRefRep1)) * 100.0).toInt())
+        } else lastRepSpeedLoss
 
         return EvaluationResult(
             score = score,
@@ -205,7 +330,10 @@ class ExerciseFormEvaluator {
             feedback = feedback,
             isRepCompleted = isRepCompleted,
             angleValue = elbowAngle,
-            exerciseState = if (pushupState == "UP") "PLANK" else if (pushupDeepEnough) "BOTTOM" else "LOWERING"
+            exerciseState = if (pushupState == "UP") "PLANK" else if (pushupDeepEnough) "BOTTOM" else "LOWERING",
+            velocityMps = max(0.0, currentVel),
+            peakPowerW = sessionPeakPower.toInt(),
+            speedLossPct = liveSpeedLoss
         )
     }
 
@@ -213,6 +341,9 @@ class ExerciseFormEvaluator {
         val hip = skeleton.hipLeft ?: skeleton.hipRight ?: return EvaluationResult.idle("Hips must be visible")
         val knee = skeleton.kneeLeft ?: skeleton.kneeRight ?: return EvaluationResult.idle("Knees must be visible")
         val ankle = skeleton.ankleLeft ?: skeleton.ankleRight ?: return EvaluationResult.idle("Ankles must be visible")
+
+        val hipY = hip.y
+        updateKinematics(hipY, liftedMassFrac = 0.85)
 
         val kneeAngle = PoseGeometry.calculateAngle(hip, knee, ankle)
         var feedback = "Step forward and lower hips"
@@ -244,21 +375,22 @@ class ExerciseFormEvaluator {
                 feedback = "Lunge down... keep balance!"
             }
         } else if (lungeState == "DOWN") {
-            if (kneeAngle > 155.0) {
+            if (kneeAngle > 150.0) {
                 lungeState = "UP"
                 isRepCompleted = true
+                onRepFinished()
                 
                 if (!lungeDeepEnough) {
                     mistake = "Incorrect lunge knee alignment"
                     feedback = "Step wider and lower hips further."
                     score = 70
                 } else {
-                    feedback = "Perfect lunge rep!"
+                    feedback = "Perfect explosive lunge!"
                     score = if (mistake != null) 70 else 96
                 }
                 minLungeAngle = 180.0
             } else {
-                feedback = "Step up to complete rep."
+                feedback = "Drive through front heel to return up."
             }
         }
 
@@ -268,7 +400,10 @@ class ExerciseFormEvaluator {
             feedback = feedback,
             isRepCompleted = isRepCompleted,
             angleValue = kneeAngle,
-            exerciseState = if (lungeState == "UP") "STAND" else if (lungeDeepEnough) "BOTTOM" else "LUNGING"
+            exerciseState = if (lungeState == "UP") "STAND" else if (lungeDeepEnough) "BOTTOM" else "LUNGING",
+            velocityMps = max(0.0, currentVel),
+            peakPowerW = sessionPeakPower.toInt(),
+            speedLossPct = lastRepSpeedLoss
         )
     }
 
@@ -300,7 +435,10 @@ class ExerciseFormEvaluator {
             feedback = feedback,
             isRepCompleted = false,
             angleValue = hipAngle,
-            exerciseState = if (mistake != null) "ALIGNMENT BREAK" else "HOLDING"
+            exerciseState = if (mistake != null) "ALIGNMENT BREAK" else "HOLDING",
+            velocityMps = 0.0,
+            peakPowerW = 0,
+            speedLossPct = 0
         )
     }
 
@@ -333,12 +471,10 @@ class ExerciseFormEvaluator {
             minPullupElbowAngle = avgElbowAngle
         }
 
-        // Check if top range of motion reached (elbow angle <= 95°)
         if (avgElbowAngle <= 95.0) {
             pullupFullRomReached = true
         }
 
-        // Arm asymmetry check
         if (leftElbowAngle != null && rightElbowAngle != null) {
             val asym = abs(leftElbowAngle - rightElbowAngle)
             if (asym > 25.0) {
@@ -348,7 +484,6 @@ class ExerciseFormEvaluator {
             }
         }
 
-        // Excessive swing / kipping check using horizontal hip displacement vs shoulder
         val hip = skeleton.hipLeft ?: skeleton.hipRight
         if (hip != null) {
             val horizontalSway = abs(hip.x - shoulder.x)
@@ -423,7 +558,10 @@ data class EvaluationResult(
     val feedback: String,
     val isRepCompleted: Boolean,
     val angleValue: Double,
-    val exerciseState: String = "READY"
+    val exerciseState: String = "READY",
+    val velocityMps: Double = 0.0,
+    val peakPowerW: Int = 0,
+    val speedLossPct: Int = 0
 ) {
     companion object {
         fun idle(message: String) = EvaluationResult(
@@ -432,7 +570,10 @@ data class EvaluationResult(
             feedback = message,
             isRepCompleted = false,
             angleValue = 180.0,
-            exerciseState = "READY"
+            exerciseState = "READY",
+            velocityMps = 0.0,
+            peakPowerW = 0,
+            speedLossPct = 0
         )
     }
 }

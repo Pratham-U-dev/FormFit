@@ -24,13 +24,13 @@ data class PullUpRepRecord(
     val speedLossPct: Int,
     val swayCm: Double,
     val fullLockout: Boolean,
-    val chinVerdict: String = "GOOD REP" // Kept for backwards compatibility
+    val chinVerdict: String = "GOOD REP"
 )
 
 data class PullUpMetrics(
     val phase: String = "HANG",
     val repCount: Int = 0,
-    val chinAtBarCount: Int = 0, // Deprecated, kept for backward compat
+    val chinAtBarCount: Int = 0,
     val speedLossPct: Int = 0,
     val peakPowerW: Int = 0,
     val currentSpeedMps: Double = 0.0,
@@ -46,14 +46,22 @@ data class PullUpMetrics(
     val forearmsEffort: Double = 0.0,
     val legsEffort: Double = 0.0,
     val shoulderYHistory: List<Float> = emptyList(),
-    val barY: Float? = null
+    val barY: Float? = null,
+    val vRefRep1: Double = 0.0,
+    val currentPowerW: Int = 0
 )
 
-class PullUpBiomechanics {
+class PullUpBiomechanics(
+    private var userWeightKg: Double = 75.0,
+    private var userHeightCm: Double = 175.0,
+    private var userArmLengthCm: Double = 65.0
+) {
     private var lastTime = 0L
-    private val massKg = 79.0
-    private val liftedMassKg = massKg * 0.956
-    private val G = 9.81
+    private val G = 9.80665
+    
+    // Effective mass lifted in pull-ups (excluding forearms & hands hanging: ~94-96%)
+    private var liftedMassKg = userWeightKg * 0.95
+    private var armLengthM = userArmLengthCm / 100.0
     
     private var phase = "HANG"
     private var repCount = 0
@@ -65,10 +73,12 @@ class PullUpBiomechanics {
     private val timestamps = mutableListOf<Long>()
     
     private var currentSpeed = 0.0
+    private var prevSpeed = 0.0
     private var currentAccel = 0.0
     private var currentPower = 0.0
     
-    private var pxPerM = 800.0
+    // Normalized screen units per physical meter (auto-calibrated from arm/torso landmarks)
+    private var normUnitsPerM = 0.42
     
     // Muscle states
     private val lats = MuscleState()
@@ -81,6 +91,7 @@ class PullUpBiomechanics {
     private var repTopTime = 0.0
     private var repEccStartTime = 0.0
     private var repPeakConcVel = 0.0
+    private var repPeakPower = 0.0
     private var repMinElbow = 180.0
     private var repBaseShoulderY = 0f
     private var repMinShoulderY = 1f
@@ -90,6 +101,14 @@ class PullUpBiomechanics {
     private var vRefRep1 = 0.0
     
     private var cachedMetrics = PullUpMetrics()
+
+    fun updateBodyParams(weightKg: Double, heightCm: Double, armLengthCm: Double) {
+        userWeightKg = weightKg.coerceIn(30.0, 250.0)
+        userHeightCm = heightCm.coerceIn(100.0, 250.0)
+        userArmLengthCm = armLengthCm.coerceIn(30.0, 120.0)
+        liftedMassKg = userWeightKg * 0.95
+        armLengthM = userArmLengthCm / 100.0
+    }
 
     fun reset() {
         lastTime = 0L
@@ -101,6 +120,7 @@ class PullUpBiomechanics {
         shoulderYHistory.clear()
         timestamps.clear()
         currentSpeed = 0.0
+        prevSpeed = 0.0
         currentAccel = 0.0
         currentPower = 0.0
         reps.clear()
@@ -109,6 +129,7 @@ class PullUpBiomechanics {
         repTopTime = 0.0
         repEccStartTime = 0.0
         repPeakConcVel = 0.0
+        repPeakPower = 0.0
         repMinElbow = 180.0
         repHipXHistory.clear()
         lats.deltaTempC = 0.0
@@ -123,10 +144,10 @@ class PullUpBiomechanics {
             lastTime = now
             return cachedMetrics
         }
-        val dt = ((now - lastTime) / 1000.0).coerceIn(0.001, 0.2)
+        val dt = ((now - lastTime) / 1000.0).coerceIn(0.01, 0.25)
         lastTime = now
         
-        // Landmark resolution with robust side fallback
+        // Landmark resolution with dual-side fallback
         val lWrist = skeleton.wristLeft
         val rWrist = skeleton.wristRight
         val lShoulder = skeleton.shoulderLeft
@@ -136,16 +157,14 @@ class PullUpBiomechanics {
         val lHip = skeleton.hipLeft
         val rHip = skeleton.hipRight
         
-        // Ensure at least one arm and shoulder are detectable
         val hasLeftArm = lWrist != null && lElbow != null && lShoulder != null
         val hasRightArm = rWrist != null && rElbow != null && rShoulder != null
         
         if (!hasLeftArm && !hasRightArm) {
-            // Return cached metrics without resetting rep counter or phase
             return cachedMetrics
         }
         
-        // Midpoint coordinates
+        // Midpoint coordinates (normalized 0.0 to 1.0)
         val shMidY = when {
             lShoulder != null && rShoulder != null -> (lShoulder.y + rShoulder.y) / 2f
             lShoulder != null -> lShoulder.y
@@ -158,15 +177,14 @@ class PullUpBiomechanics {
             else -> rWrist!!.y
         }
         
-        // Dynamic arm-length calibration
+        // Dynamic anthropometric scale calibration
         val measuredArmY = abs(shMidY - wrMidY)
-        if (measuredArmY > 0.08f) {
-            val expectedArmM = 0.60
-            val computedPxPerM = (measuredArmY / expectedArmM)
-            pxPerM = (0.95 * pxPerM + 0.05 * computedPxPerM).coerceIn(300.0, 2000.0)
+        if (measuredArmY in 0.12f..0.60f) {
+            val instantUnitsPerM = (measuredArmY / armLengthM)
+            normUnitsPerM = (0.92 * normUnitsPerM + 0.08 * instantUnitsPerM).coerceIn(0.20, 0.90)
         }
         
-        // Calculate elbow angles
+        // Elbow angle calculation
         val elLeft = if (hasLeftArm) calculateAngle(lShoulder!!.x, lShoulder.y, lElbow!!.x, lElbow.y, lWrist!!.x, lWrist.y) else null
         val elRight = if (hasRightArm) calculateAngle(rShoulder!!.x, rShoulder.y, rElbow!!.x, rElbow.y, rWrist!!.x, rWrist.y) else null
         val currentElbowAngle = when {
@@ -175,38 +193,53 @@ class PullUpBiomechanics {
             else -> elRight!!
         }
         
-        // Kinematics filtering
+        // Kinematics velocity & acceleration filtering
         shoulderYHistory.add(shMidY)
         timestamps.add(now)
-        if (shoulderYHistory.size > 15) {
+        if (shoulderYHistory.size > 10) {
             shoulderYHistory.removeAt(0)
             timestamps.removeAt(0)
         }
         
-        if (shoulderYHistory.size >= 4) {
+        if (shoulderYHistory.size >= 3) {
             val yCurr = shoulderYHistory.takeLast(2).average().toFloat()
             val yPrev = shoulderYHistory.take(2).average().toFloat()
-            val dtStep = ((now - timestamps.first()) / 1000.0).coerceAtLeast(0.05)
+            val dtStep = ((now - timestamps.first()) / 1000.0).coerceIn(0.03, 0.40)
             
-            val deltaM = (yPrev - yCurr) / pxPerM
-            // Deadband filter: ignore sub-threshold camera sensor jitter
-            val rawSpeed = if (abs(deltaM) > 0.005) deltaM / dtStep else 0.0
+            // In screen coordinates, moving UP means y is decreasing (yPrev > yCurr is positive velocity)
+            val deltaNorm = (yPrev - yCurr)
+            val deltaMeters = deltaNorm / normUnitsPerM
             
-            // EMA smoothing
-            currentSpeed = (0.75 * currentSpeed + 0.25 * rawSpeed)
-            if (abs(currentSpeed) < 0.03) currentSpeed = 0.0
-            currentAccel = (currentSpeed - (deltaM / dtStep)) / dtStep
+            // Raw velocity in m/s
+            val rawVel = deltaMeters / dtStep
+            
+            // Low-pass exponential filter
+            prevSpeed = currentSpeed
+            currentSpeed = (0.60 * currentSpeed + 0.40 * rawVel)
+            if (abs(currentSpeed) < 0.03) {
+                currentSpeed = 0.0
+            }
+            
+            currentAccel = (currentSpeed - prevSpeed) / dt
         }
         
-        // Power calculation (only when actively pulling upward)
-        val forceN = liftedMassKg * (G + max(0.0, currentAccel))
-        currentPower = if (phase == "PULL" && currentSpeed > 0.05) {
-            forceN * currentSpeed
+        val timeS = now / 1000.0
+        val concentricVelocity = max(0.0, currentSpeed)
+        
+        // Instantaneous Mechanical Force & Power
+        val dynamicAccel = max(0.0, currentAccel)
+        val forceN = liftedMassKg * (G + dynamicAccel)
+        
+        if (phase == "PULL" && concentricVelocity > 0.04) {
+            currentPower = forceN * concentricVelocity
+            if (currentPower > repPeakPower) {
+                repPeakPower = currentPower
+            }
+            if (currentPower > peakPowerSessionW) {
+                peakPowerSessionW = currentPower
+            }
         } else {
-            0.0
-        }
-        if (currentPower > peakPowerSessionW) {
-            peakPowerSessionW = currentPower
+            currentPower = 0.0
         }
         
         // Hip tracking for sway
@@ -217,17 +250,16 @@ class PullUpBiomechanics {
             else -> null
         }
         
-        val timeS = now / 1000.0
-        
         // Pull-Up Finite State Machine
         when (phase) {
             "HANG" -> {
-                // User hanging from bar, initiates pull when elbow flexes or speed is positive
-                if (currentElbowAngle < 130.0 || (currentSpeed > 0.08 && currentElbowAngle < 145.0)) {
+                // User hanging from bar, initiates pull when elbow flexes (<135°) or upward speed is positive
+                if (currentElbowAngle < 132.0 || (currentSpeed > 0.08 && currentElbowAngle < 145.0)) {
                     phase = "PULL"
                     repStartTime = timeS
                     repMinElbow = currentElbowAngle
-                    repPeakConcVel = max(0.1, currentSpeed)
+                    repPeakConcVel = max(0.12, concentricVelocity)
+                    repPeakPower = currentPower
                     repBaseShoulderY = shMidY
                     repMinShoulderY = shMidY
                     repHipXHistory.clear()
@@ -236,7 +268,8 @@ class PullUpBiomechanics {
             }
             "PULL" -> {
                 if (hipMidX != null) repHipXHistory.add(hipMidX)
-                if (currentSpeed > repPeakConcVel) repPeakConcVel = currentSpeed
+                if (concentricVelocity > repPeakConcVel) repPeakConcVel = concentricVelocity
+                if (currentPower > repPeakPower) repPeakPower = currentPower
                 if (currentElbowAngle < repMinElbow) repMinElbow = currentElbowAngle
                 if (shMidY < repMinShoulderY) repMinShoulderY = shMidY
                 
@@ -244,7 +277,7 @@ class PullUpBiomechanics {
                 if (currentElbowAngle <= 95.0 || (currentElbowAngle <= 105.0 && currentSpeed <= 0.02)) {
                     phase = "TOP"
                     repTopTime = timeS
-                } else if (currentSpeed < -0.12 && currentElbowAngle > 115.0) {
+                } else if (currentSpeed < -0.15 && currentElbowAngle > 115.0) {
                     // Aborted pull without reaching top
                     phase = "LOWER"
                     repTopTime = timeS
@@ -271,33 +304,41 @@ class PullUpBiomechanics {
             }
         }
         
-        // Neuromuscular and Fatigue Modeling (Only active during movement phases)
+        // Neuromuscular and Fatigue Modeling
         val isActivePhase = phase == "PULL" || phase == "TOP" || phase == "LOWER"
         val targetAct = when (phase) {
             "PULL" -> 1.0
             "TOP" -> 0.8
             "LOWER" -> 0.5
-            else -> 0.0 // HANG or stationary: 0 baseline activation
+            else -> 0.0
         }
         
         if (isActivePhase) {
             updateMuscle(lats, dt, targetAct, 0.734, 124.0)
             updateMuscle(biceps, dt, targetAct * 0.9, 0.402, 78.0)
         } else {
-            // Resting state: slowly cool down and recover
             lats.activation = (lats.activation - dt * 0.5).coerceAtLeast(0.0)
             biceps.activation = (biceps.activation - dt * 0.5).coerceAtLeast(0.0)
             lats.heatPowerW = 0.0
             biceps.heatPowerW = 0.0
         }
         
-        val vl = if (vRefRep1 > 0) max(0.0, (1.0 - (currentSpeed / vRefRep1)) * 100.0).toInt() else 0
+        // Real-time Velocity Based Training (VBT) Speed Loss % vs Rep 1 calculation
+        val currentVbtSpeedLoss = if (vRefRep1 > 0.05) {
+            if (phase == "PULL") {
+                max(0, ((1.0 - (repPeakConcVel / vRefRep1)) * 100.0).toInt()).coerceIn(0, 95)
+            } else {
+                reps.lastOrNull()?.speedLossPct ?: 0
+            }
+        } else {
+            0
+        }
         
         cachedMetrics = PullUpMetrics(
             phase = phase,
             repCount = repCount,
-            chinAtBarCount = repCount, // 1:1 with reps
-            speedLossPct = reps.lastOrNull()?.speedLossPct ?: vl,
+            chinAtBarCount = repCount,
+            speedLossPct = currentVbtSpeedLoss,
             peakPowerW = peakPowerSessionW.toInt(),
             currentSpeedMps = max(0.0, currentSpeed),
             elbowAngle = currentElbowAngle.toInt(),
@@ -312,7 +353,9 @@ class PullUpBiomechanics {
             forearmsEffort = if (isActivePhase) 0.7 else 0.0,
             legsEffort = 0.05,
             shoulderYHistory = shoulderYHistory.toList(),
-            barY = wrMidY
+            barY = wrMidY,
+            vRefRep1 = vRefRep1,
+            currentPowerW = currentPower.toInt()
         )
         
         return cachedMetrics
@@ -324,26 +367,34 @@ class PullUpBiomechanics {
         val durHold = max(0.0, repEccStartTime - repTopTime)
         val durEcc = max(0.3, timeS - (if (repEccStartTime > 0) repEccStartTime else repTopTime))
         
-        if (vRefRep1 == 0.0 && repPeakConcVel > 0.1) {
-            vRefRep1 = repPeakConcVel
-        }
-        val vl = if (vRefRep1 > 0) max(0.0, (1.0 - (repPeakConcVel / vRefRep1)) * 100.0).toInt() else 0
+        val actualPeakVel = max(0.15, repPeakConcVel)
         
-        // Biomechanical work: lifted mass * g * ROM
-        val romM = abs(repBaseShoulderY - repMinShoulderY) / pxPerM
-        val romCm = (romM * 100.0).coerceIn(20.0, 75.0)
-        val workJ = liftedMassKg * G * (romCm / 100.0)
+        // Rep 1 establishes baseline velocity reference (vRefRep1)
+        if (vRefRep1 == 0.0 || repCount == 1) {
+            vRefRep1 = actualPeakVel
+        }
+        
+        // VBT Speed loss % vs Rep 1
+        val vl = if (vRefRep1 > 0.05) {
+            max(0, ((1.0 - (actualPeakVel / vRefRep1)) * 100.0).toInt()).coerceIn(0, 95)
+        } else 0
+        
+        // Biomechanical work: Lifted mass * G * ROM
+        val romNorm = abs(repBaseShoulderY - repMinShoulderY)
+        val romM = (romNorm / normUnitsPerM).coerceIn(0.20, 0.85)
+        val workJ = liftedMassKg * G * romM
         cumulativeWorkJ += workJ
         
-        // Biological metabolic energy: work / efficiency (0.22) + eccentric work (0.35)
+        // Biological metabolic energy consumption:
+        // Mechanical work / human muscular efficiency (22%) + eccentric work (35%)
         val kcal = (workJ / 0.22 + workJ * 0.35 / 0.22) / 4184.0
         cumulativeKcal += kcal
         
         val swayCm = if (repHipXHistory.isNotEmpty()) {
-            ((repHipXHistory.maxOrNull()!! - repHipXHistory.minOrNull()!!) / pxPerM * 100.0).coerceIn(0.0, 40.0)
+            ((repHipXHistory.maxOrNull()!! - repHipXHistory.minOrNull()!!) / normUnitsPerM * 100.0).coerceIn(0.0, 45.0)
         } else 3.0
         
-        val lockout = currentElbowAngle >= 142.0
+        val lockout = currentElbowAngle >= 140.0
         val isDeep = repMinElbow <= 95.0
         
         val verdict = when {
@@ -354,16 +405,18 @@ class PullUpBiomechanics {
             else -> "CONTROLLED REP"
         }
         
-        // Muscle temp rise per completed rep
-        lats.deltaTempC = min(2.5, lats.deltaTempC + 0.18)
+        val finalRepPeakPower = if (repPeakPower > 0.0) repPeakPower else (liftedMassKg * G * actualPeakVel)
+        
+        // Lats temperature rise per completed rep
+        lats.deltaTempC = min(2.8, lats.deltaTempC + 0.18)
         
         reps.add(PullUpRepRecord(
             repNum = repCount,
             durationConcentric = durConc,
             durationHold = durHold,
             durationEccentric = durEcc,
-            peakVelocity = max(0.2, repPeakConcVel),
-            peakPower = liftedMassKg * G * max(0.2, repPeakConcVel),
+            peakVelocity = actualPeakVel,
+            peakPower = finalRepPeakPower,
             energyKcal = kcal,
             speedLossPct = vl,
             swayCm = swayCm,
@@ -373,6 +426,8 @@ class PullUpBiomechanics {
         
         repTopTime = 0.0
         repEccStartTime = 0.0
+        repPeakConcVel = 0.0
+        repPeakPower = 0.0
     }
     
     private fun updateMuscle(state: MuscleState, dt: Double, targetAct: Double, mass: Double, mvic: Double) {

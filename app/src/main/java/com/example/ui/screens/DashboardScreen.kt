@@ -3,6 +3,8 @@ package com.example.ui.screens
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -54,6 +57,7 @@ import com.example.viewmodel.WorkoutViewModel
 fun DashboardScreen(
     viewModel: WorkoutViewModel,
     onStartWorkout: (String) -> Unit,
+    onOpenProfile: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val stats by viewModel.userStats.collectAsState()
@@ -141,18 +145,21 @@ fun DashboardScreen(
                         )
                     }
 
-                    // Profile Avatar (Placeholder)
+                    // Top Profile Avatar Button
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
-                            .background(Color(0xFFE2E8F0), shape = CircleShape)
-                            .border(1.5.dp, Color(0xFFCBD5E1), shape = CircleShape),
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(DuoBlue, shape = CircleShape)
+                            .border(1.5.dp, DuoBlueDark, shape = CircleShape)
+                            .clickable { onOpenProfile() }
+                            .testTag("top_profile_button"),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Person,
-                            contentDescription = "Profile",
-                            tint = Color.Gray,
+                            contentDescription = "Open Profile",
+                            tint = Color.White,
                             modifier = Modifier.size(24.dp)
                         )
                     }

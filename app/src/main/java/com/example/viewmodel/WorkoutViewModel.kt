@@ -51,8 +51,24 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
     private val repository = FormFitRepository(
         database.workoutDao(),
         database.userStatsDao(),
+        database.userProfileDao(),
         database.nutritionDao()
     )
+
+    val userBodyProfile: StateFlow<com.example.data.UserBodyProfile> = repository.userBodyProfile
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = com.example.data.UserBodyProfile()
+        )
+
+    fun updateUserBodyProfile(profile: com.example.data.UserBodyProfile) {
+        viewModelScope.launch {
+            repository.updateUserBodyProfile(profile)
+            pullUpBiomechanics.updateBodyParams(profile.weightKg, profile.heightCm, profile.armLengthCm)
+            com.example.audio.DuoSoundPlayer.playCorrect()
+        }
+    }
 
     private val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     val todayDateString: String = sdf.format(Date())
@@ -188,6 +204,15 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
     private val _pullUpMetrics = MutableStateFlow(PullUpMetrics())
     val pullUpMetrics = _pullUpMetrics.asStateFlow()
 
+    private val _liveSpeedLossPct = MutableStateFlow(0)
+    val liveSpeedLossPct = _liveSpeedLossPct.asStateFlow()
+
+    private val _livePeakPowerW = MutableStateFlow(0)
+    val livePeakPowerW = _livePeakPowerW.asStateFlow()
+
+    private val _liveVelocityMps = MutableStateFlow(0.0)
+    val liveVelocityMps = _liveVelocityMps.asStateFlow()
+
     private val _exerciseState = MutableStateFlow("READY")
     val exerciseState = _exerciseState.asStateFlow()
 
@@ -258,6 +283,12 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             allSessions.collect { sessions ->
                 evaluateComplexBadges(sessions)
+            }
+        }
+        // Observe body profile to update biomechanics physics models
+        viewModelScope.launch {
+            userBodyProfile.collect { profile ->
+                pullUpBiomechanics.updateBodyParams(profile.weightKg, profile.heightCm, profile.armLengthCm)
             }
         }
     }
@@ -411,7 +442,10 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         feedback: String,
         isRepCompleted: Boolean,
         state: String = "READY",
-        skeleton: PoseSkeleton? = null
+        skeleton: PoseSkeleton? = null,
+        velocityMps: Double = 0.0,
+        peakPowerW: Int = 0,
+        speedLossPct: Int = 0
     ) {
         // Virtual sandbox is purely for informational guide - never process camera or count reps
         if (_isVirtualCoachMode.value) return
@@ -423,6 +457,9 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
             val metrics = pullUpBiomechanics.processFrame(skeleton)
             _pullUpMetrics.value = metrics
             _exerciseState.value = metrics.phase
+            _liveSpeedLossPct.value = metrics.speedLossPct
+            _livePeakPowerW.value = metrics.peakPowerW
+            _liveVelocityMps.value = metrics.currentSpeedMps
             
             // Sync with rep counter
             if (metrics.repCount > _repCount.value) {
@@ -437,6 +474,10 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
             }
         } else {
             _exerciseState.value = state
+            _liveSpeedLossPct.value = speedLossPct
+            _livePeakPowerW.value = peakPowerW
+            _liveVelocityMps.value = velocityMps
+
             if (isRepCompleted) {
                 _repCount.value += 1
                 _repScores.value = _repScores.value + score
@@ -475,6 +516,7 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         val reps = _repCount.value
         val duration = _sessionSeconds.value
         val mistakes = _mistakesList.value.size
+        val bodyWeight = userBodyProfile.value.weightKg
         
         // Form metrics math
         val avgScore = if (_repScores.value.isNotEmpty()) {
@@ -517,12 +559,21 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         _lastSessionMistakes.value = _mistakesList.value
 
         val kcal = if (exercise == "Pull-up") {
-            if (_pullUpMetrics.value.totalKcal > 0.05) _pullUpMetrics.value.totalKcal else reps * 0.55
+            if (_pullUpMetrics.value.totalKcal > 0.05) _pullUpMetrics.value.totalKcal else (reps * (bodyWeight * 0.95 * 9.81 * 0.45) / 920.0)
+        } else if (exercise == "Squat") {
+            reps * (bodyWeight * 0.88 * 9.81 * 0.50) / 920.0
+        } else if (exercise == "Push-up") {
+            reps * (bodyWeight * 0.64 * 9.81 * 0.35) / 920.0
         } else {
             reps * 0.45
         }
         _lastSessionCalories.value = kcal
-        _lastSessionPeakPower.value = _pullUpMetrics.value.peakPowerW
+        val peakPower = if (exercise == "Pull-up") {
+            _pullUpMetrics.value.peakPowerW
+        } else {
+            if (_livePeakPowerW.value > 0) _livePeakPowerW.value else (_repScores.value.size * 45 + (bodyWeight * 4.5).toInt())
+        }
+        _lastSessionPeakPower.value = peakPower
 
         val session = WorkoutSession(
             exerciseType = exercise,

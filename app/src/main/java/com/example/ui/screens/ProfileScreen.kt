@@ -10,6 +10,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -42,8 +44,10 @@ import com.example.viewmodel.WorkoutViewModel
 @Composable
 fun ProfileScreen(
     viewModel: WorkoutViewModel,
+    onBack: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    BackHandler { onBack() }
     val context = LocalContext.current
     val stats by viewModel.userStats.collectAsState()
     val sessions by viewModel.allSessions.collectAsState()
@@ -71,6 +75,34 @@ fun ProfileScreen(
             .verticalScroll(scrollState)
             .padding(16.dp)
     ) {
+        // TOP BACK NAVIGATION ROW
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Color(0xFFF1F5F9), CircleShape)
+                    .border(1.5.dp, DuoBorder, CircleShape)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = DuoInk
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = "PROFILE & ACCOUNT",
+                color = DuoInk,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 18.sp
+            )
+        }
         // PROFILE HEADER
         Row(
             modifier = Modifier
