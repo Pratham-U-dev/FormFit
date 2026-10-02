@@ -522,8 +522,13 @@ fun ExerciseInfoView(
                         contentAlignment = Alignment.Center
                     ) {
                         if (exerciseType == "Pull-up") {
-                            // User's attached animated MP4
+                            // User's attached chin-up animated MP4
                             ChinupVideoPlayer(
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else if (exerciseType == "Push-up") {
+                            // User's attached push-up animated MP4
+                            PushupVideoPlayer(
                                 modifier = Modifier.fillMaxSize()
                             )
                         } else {
@@ -969,6 +974,65 @@ fun ChinupVideoPlayer(
                     }
                     setOnErrorListener { _, what, extra ->
                         Log.e("ChinupVideoPlayer", "VideoView playback error: what=$what, extra=$extra")
+                        true
+                    }
+                }
+            },
+            update = { videoView ->
+                if (!videoView.isPlaying) {
+                    videoView.start()
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun PushupVideoPlayer(
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val videoUri = remember {
+        Uri.parse("android.resource://${context.packageName}/${R.raw.pushup}")
+    }
+    var activeVideoView by remember { mutableStateOf<VideoView?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            try {
+                activeVideoView?.stopPlayback()
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.White),
+        contentAlignment = Alignment.Center
+    ) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { ctx ->
+                VideoView(ctx).apply {
+                    activeVideoView = this
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    setVideoURI(videoUri)
+                    setOnPreparedListener { mp ->
+                        mp.isLooping = true
+                        mp.setVolume(0f, 0f) // Silent animation loop
+                        start()
+                    }
+                    setOnCompletionListener {
+                        start()
+                    }
+                    setOnErrorListener { _, what, extra ->
+                        Log.e("PushupVideoPlayer", "VideoView playback error: what=$what, extra=$extra")
                         true
                     }
                 }
