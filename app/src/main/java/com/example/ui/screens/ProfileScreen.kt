@@ -52,6 +52,7 @@ fun ProfileScreen(
     val stats by viewModel.userStats.collectAsState()
     val sessions by viewModel.allSessions.collectAsState()
     val isSoundEnabled by viewModel.isSoundEnabled.collectAsState()
+    val isTtsEnabled by viewModel.isTtsEnabled.collectAsState()
     val isVirtualCoachMode by viewModel.isVirtualCoachMode.collectAsState()
     val aiApiKey by viewModel.aiApiKey.collectAsState()
     val userProfile by viewModel.currentUserProfile.collectAsState()
@@ -335,6 +336,56 @@ fun ProfileScreen(
                             uncheckedTrackColor = DuoBorder
                         ),
                         modifier = Modifier.testTag("sound_effects_switch")
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(DuoBorder)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Voice Coach (TTS) Toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(if (isTtsEnabled) "🗣️" else "🤫", fontSize = 20.sp)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "Voice Coach (TTS)",
+                                color = DuoInk,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                            Text(
+                                text = if (isTtsEnabled) "Live spoken posture & rep cues ON" else "Voice cues disabled",
+                                color = DuoInkMuted,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = isTtsEnabled,
+                        onCheckedChange = { enabled ->
+                            viewModel.setTtsEnabled(enabled)
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = DuoGreen,
+                            uncheckedThumbColor = Color.White,
+                            uncheckedTrackColor = DuoBorder
+                        ),
+                        modifier = Modifier.testTag("tts_voice_coach_switch")
                     )
                 }
 

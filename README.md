@@ -1,146 +1,336 @@
-# 🏋️‍♂️ FormFit — AI-Powered Personal Fitness & Nutrition Companion
+<div align="center">
 
-> **Transform your device into a real-time AI movement coach, intelligent meal scanner, and global fitness arena.**
+<img src="app/src/main/res/drawable/kettling_logo.jpg" alt="FormFit Logo" width="120" style="border-radius: 24px;" />
 
-[![Kotlin](https://img.shields.io/badge/Language-Kotlin-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org/)
-[![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com/jetpack/compose)
-[![Material 3](https://img.shields.io/badge/Design-Material%203-757575?style=for-the-badge&logo=materialdesign&logoColor=white)](https://m3.material.io/)
-[![Gemini AI](https://img.shields.io/badge/AI-Gemini%20Vision-8E24AA?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
-[![Android Min SDK](https://img.shields.io/badge/Min%20SDK-24+-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com/)
-[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
+# FormFit
 
----
+**AI-Powered Real-Time Exercise Coach & Fitness Companion**
 
-## 🌟 What is FormFit?
-
-**FormFit** is a next-generation, all-in-one mobile workout and nutrition ecosystem. Designed for athletes, fitness enthusiasts, and anyone striving for a healthier lifestyle, FormFit combines cutting-edge computer vision with Google Gemini AI to analyze your exercise technique in real-time, log your meal nutrition instantly from camera photos, and connect you with a vibrant global leaderboard community.
-
-Whether you're performing push-ups in your living room, tracking daily macronutrients, or competing for the top rank on the global leaderboard, FormFit delivers immediate feedback and gamified motivation right in the palm of your hand.
+*Biomechanics · Nutrition · Leaderboard · Gamification*
 
 ---
 
-## ✨ Key Features
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org/)
+[![Jetpack Compose](https://img.shields.io/badge/Jetpack_Compose-1.7-4285F4?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com/jetpack/compose)
+[![ML Kit](https://img.shields.io/badge/ML_Kit-BlazePose-FF6D00?style=for-the-badge&logo=google&logoColor=white)](https://developers.google.com/ml-kit/vision/pose-detection)
+[![Gemini AI](https://img.shields.io/badge/Gemini_Vision-1.5_Flash-8E24AA?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
+[![Firebase](https://img.shields.io/badge/Firebase-Firestore-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)](https://firebase.google.com/)
+[![License](https://img.shields.io/badge/License-MIT-22C55E?style=for-the-badge)](LICENSE)
+[![Min SDK](https://img.shields.io/badge/Min_SDK-24_(Android_7)-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com/)
 
-### 🏋️ 1. Real-Time AI Form Coach & Exercise Counter
-* **Live Motion & Pose Tracking**: Detects exercise movements dynamically via your phone's camera.
-* **Instant Visual Feedback**: Get live form coaching and automatic rep counting during active workout sessions.
-* **Form Accuracy Scoring**: Calculates real-time form percentage scores so you can optimize posture, maximize workout gains, and prevent injuries.
-
-### 🥗 2. Smart AI Food & Nutrition Scanner
-* **Multimodal Meal Recognition**: Snap a photo of your meal or upload from gallery to receive an instant breakdown of calories, protein, carbs, and fats.
-* **Dual-Engine Architecture**:
-  * **Gemini Vision API (Cloud)**: Deep multimodal semantic analysis for detailed ingredient and macro estimations.
-  * **Local Histogram Engine (Offline)**: Advanced local color-density and contour analysis that guarantees macro estimation even without internet connection or API keys.
-* **Daily Macro Dashboard**: Seamlessly tracks your daily target progress with intuitive visual progress rings.
-
-### 🏆 3. Global Real-Time Leaderboard
-* **Centralized Live Arena**: Compete with real athletes across devices and regions in real-time.
-* **Automatic Cloud Synchronization**: Workout sessions, earned XP, streaks, and levels sync to a centralized global registry automatically.
-* **Universal Access**: Share the app APK with friends and family—their custom display names and scores immediately appear on your global leaderboard!
-
-### 🎖️ 4. Gamification, Badges & Streaks
-* **XP & Leveling System**: Earn Experience Points (XP) for every completed exercise rep and logged meal to level up your athlete profile.
-* **Achievements Shelf**: Unlock milestone badges for workout streaks, total reps, perfect form scores, and diet consistency.
-* **Streak Protection**: Stay motivated with daily streak tracking and milestone rewards.
-
-### 🤖 5. Virtual AI Personal Trainer
-* **24/7 AI Coach Chat**: Ask questions regarding workout plans, recovery advice, protein requirements, or exercise form tips.
-* **Contextual Insights**: Powered by Gemini LLM to deliver personalized fitness guidance tailored to your current stats.
-
-### 🎨 6. Modern Duolingo-Inspired UI
-* **Vibrant Material 3 Aesthetic**: Bold high-contrast typography, playful interactive controls, and cheerful visual feedback.
-* **Edge-to-Edge Fluidity**: Optimized for standard mobile screens, foldables, and tablets with adaptive navigation.
+</div>
 
 ---
 
-## 🛠️ Technical Architecture & Stack
+## What is FormFit?
 
-FormFit is engineered following modern Android architecture best practices (**MVVM + Clean Architecture**), delivering high performance, minimal memory overhead (~24.8 MB footprint), and smooth 60 FPS Compose rendering.
+FormFit turns your Android phone into a professional-grade exercise analysis system. Point the camera at yourself while working out — FormFit detects your body in real time, evaluates your technique on every single rep, and gives you instant feedback so you train smarter, not harder.
+
+Beyond exercise tracking, FormFit includes a Gemini-powered meal scanner for nutrition logging, a live Firebase leaderboard so you compete globally, and a Duolingo-inspired XP + streak system that keeps you motivated day after day.
+
+---
+
+## Feature Overview
+
+<table>
+<tr>
+<td width="50%">
+
+### 🏋️ Real-Time Exercise Coach
+- **BlazePose on-device AI** — 33-landmark body tracking at 30 FPS
+- **Biomechanics engines** for Pull-Up and Push-Up
+- Joint angle analysis for Squat, Lunge, Plank
+- Live form scoring (0–100) per rep
+- Instant audio + visual feedback
+
+</td>
+<td width="50%">
+
+### 🥗 Smart Nutrition Scanner
+- Photograph any meal → instant macro breakdown
+- Gemini Vision API for deep semantic analysis
+- Local fallback engine works offline
+- Daily calorie & macro tracker
+- Full meal history by date
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🏆 Global Leaderboard
+- Live Firebase Firestore competition
+- XP syncs automatically after every session
+- Custom display names
+- Real-time rank updates
+
+</td>
+<td width="50%">
+
+### 🎮 Gamification
+- XP earned per rep based on form quality
+- Level progression system
+- Streak tracking (daily workout calendar)
+- Badges: First Workout, 7-Day Streak, Form Master, Squat Deity
+
+</td>
+</tr>
+</table>
+
+---
+
+## Supported Exercises
+
+| Exercise | Engine | Depth |
+|---|---|---|
+| **Pull-Up** | Full Biomechanics (`PullUpBiomechanics.kt`) | Physics, VBT, Muscle Fatigue, Temperature |
+| **Push-Up** | Full Biomechanics (`PushUpBiomechanics.kt`) | Physics, VBT, Muscle Fatigue, Hip Sag Detection |
+| **Squat** | Angle + State Machine | Depth, Knee Valgus, Form Score |
+| **Lunge** | Angle + State Machine | Depth, Knee Alignment, Form Score |
+| **Plank** | Angle Monitor | Hip Alignment, Hold Time |
+
+---
+
+## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                          FormFit App                             │
-├────────────────────────────────┬─────────────────────────────────┤
-│         UI Layer               │          Data & AI Layer        │
-│  • Jetpack Compose & M3        │  • Gemini Vision REST API       │
-│  • Navigation Compose          │  • Centralized Cloud Sync       │
-│  • StateFlow / ViewModel       │  • SharedPreferences Cache     │
-└────────────────────────────────┴─────────────────────────────────┘
+FormFit/
+├── cv/
+│   ├── PoseAnalyzer.kt          # BlazePose landmark → angle → form score pipeline
+│   ├── PullUpBiomechanics.kt    # Pull-up physics engine (kinematics, VBT, muscle model)
+│   └── PushUpBiomechanics.kt    # Push-up physics engine (kinematics, VBT, muscle model)
+│
+├── viewmodel/
+│   └── WorkoutViewModel.kt      # MVVM state: sessions, XP, reps, biomechanics routing
+│
+├── ui/screens/
+│   ├── DashboardScreen.kt       # Home: stats, streaks, quick-start
+│   ├── PracticeScreen.kt        # Camera + pose overlay + exercise HUDs
+│   ├── SummaryScreen.kt         # Post-workout analytics
+│   ├── NutritionScreen.kt       # Meal logger + Gemini scanner
+│   ├── LeaderboardScreen.kt     # Firebase global rankings
+│   └── ProfileScreen.kt        # Settings, body params, badges
+│
+├── data/
+│   ├── Database.kt              # Room DB: WorkoutSession, UserStats, NutritionLog
+│   ├── Repository.kt            # Data access layer
+│   └── FirebaseLeaderboardRepository.kt  # Firestore sync
+│
+├── api/
+│   └── GeminiFoodAnalyzer.kt    # Gemini Vision API for food recognition
+│
+└── audio/
+    └── DuoSoundPlayer.kt        # Duolingo-style feedback sounds
 ```
 
-### 💻 Tech Stack
-* **Language**: [Kotlin](https://kotlinlang.org/) (100%)
-* **UI Framework**: [Jetpack Compose](https://developer.android.com/jetpack/compose) with Material Design 3
-* **Async & Reactive**: Kotlin Coroutines & `StateFlow` / `SharedFlow`
-* **Networking**: [OkHttp3](https://square.github.io/okhttp/) & [Retrofit](https://square.github.io/retrofit/)
-* **AI & Vision**: [Google Gemini 1.5 Flash Vision API](https://ai.google.dev/) + Custom Color-Histogram & Contour Analyzer
-* **Data Storage**: Local `SharedPreferences` + REST Cloud Master Registry
+### Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Language | Kotlin 2.0 |
+| UI | Jetpack Compose + Material 3 |
+| Architecture | MVVM + Clean Architecture |
+| Pose Estimation | Google ML Kit BlazePose (on-device TFLite) |
+| Camera | CameraX |
+| Database | Room (SQLite) |
+| Cloud | Firebase Firestore |
+| Nutrition AI | Google Gemini Vision API |
+| Async | Kotlin Coroutines + StateFlow |
 
 ---
 
-## 📱 App Screens Overview
+## Biomechanics Deep Dive
 
-| Screen | Description |
-| :--- | :--- |
-| **🏠 Workout Coach** | Interactive camera session, rep counters, exercise selection, and live form feedback. |
-| **🥗 Nutrition** | Instant meal camera scanner, macro breakdown summary, and daily target logs. |
-| **🏆 Leaderboard** | Live global rankings displaying top athletes, ranks, XP, and streak indicators. |
-| **🤖 AI Coach** | Conversational chat interface for personalized fitness advice and custom workout plans. |
-| **👤 Profile** | Personal stats overview, Achievements Shelf (badges), AI Key configuration, and settings. |
+### How Pull-Up & Push-Up Analysis Works
+
+Both engines follow the same pipeline:
+
+```
+Camera Frame
+    │
+    ▼
+BlazePose → 33 Landmarks (X, Y, confidence)
+    │
+    ▼
+PoseSkeleton → filter joints, compute bilateral averages
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Kinematic Engine                                           │
+│  • Scale calibration (arm/torso length → px per metre)      │
+│  • Velocity from rolling shoulder Y window (EMA filtered)   │
+│  • Acceleration from velocity delta / dt                    │
+│  • Force = mass × (g + accel)                               │
+│  • Power = force × velocity                                 │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│  State Machine                                              │
+│  Pull-Up: HANG → PULL → TOP → LOWER → HANG                  │
+│  Push-Up: PLANK → LOWER → BOTTOM → PRESS → PLANK            │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│  3-Compartment Muscle Fatigue Model                         │
+│  mR (rested) → mA (active) → mF (fatigued)                  │
+│  + Thermal model: heat generation → temperature rise         │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+PullUpMetrics / PushUpMetrics → ViewModel → HUD overlay
+```
+
+### Velocity-Based Training (VBT)
+
+Rep 1 peak concentric velocity establishes a **baseline (vRef)**. Every subsequent rep:
+
+```
+Speed Loss % = (1 - currentRepPeakVelocity / vRef) × 100
+```
+
+> When speed loss exceeds 20–30%, neuromuscular fatigue is accumulating rapidly — this is your signal to rest or stop the set.
+
+### Muscle Fatigue Model
+
+Each muscle is modelled with 3 fiber pools:
+
+| Pool | Symbol | Meaning |
+|---|---|---|
+| Rested | `mR` | Available, unfatigued fibers |
+| Active | `mA` | Currently recruited fibers |
+| Fatigued | `mF` | Fatigued fibers unable to contract |
+
+Transition rates per frame:
+- Recruitment: `mR → mA` at rate proportional to activation demand
+- Fatigue:     `mA → mF` at rate 0.025/s during exercise
+- Recovery:    `mF → mR` at rate 0.005/s (faster at rest)
+
+Effort Index combines fiber state + temperature:
+```
+effortIndex = 0.9 × (mA + mF) + 0.1 × (ΔTemp / 2.0°C ceiling)
+```
 
 ---
 
-## 🚀 Getting Started
+## Setup & Installation
 
 ### Prerequisites
-* **Android Device / Emulator**: Running Android 7.0 (API Level 24) or higher.
-* **Android Studio**: Ladybug / Jellyfish or newer with Kotlin plugin.
-* *(Optional)* **Gemini API Key**: For cloud-powered multimodal meal recognition. Get a free key at [Google AI Studio](https://aistudio.google.com/).
 
-### Installation
+- Android Studio Ladybug (2024.2.1) or newer
+- Android device or emulator running API 24+
+- Google Gemini API key (free tier available at [ai.google.dev](https://ai.google.dev/))
+- Firebase project with Firestore enabled (for leaderboard)
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/your-username/formfit-android.git
-   cd formfit-android
-   ```
+### 1 · Clone the repository
 
-2. **Open in Android Studio**:
-   Open Android Studio and select **Open an Existing Project**, then select the project root directory.
-
-3. **Build & Run**:
-   * Connect an Android device via USB debugging or start an emulator.
-   * Press `Shift + F10` or click the **Run** button in Android Studio.
-
-4. **(Optional) Add Gemini Vision API Key**:
-   * Navigate to the **Profile** tab in FormFit.
-   * Enter your Gemini API key in the **AI Vision Recognition Key** field to activate cloud AI meal analysis.
-
----
-
-## 📂 Project Structure
-
-```
-app/src/main/java/com/example/
-├── api/                  # Gemini Vision API & Local Computer Vision Analyzers
-├── data/                 # Data Models, Repositories & Cloud Leaderboard Services
-├── ui/
-│   ├── components/       # Reusable Compose Cards, Dialogs, Buttons & Pulse Indicators
-│   ├── navigation/       # Navigation routes and bottom bar setup
-│   ├── screens/          # Workout, Nutrition, Leaderboard, AI Coach & Profile screens
-│   └── theme/            # Material 3 Color Schemes, Typography & Shapes
-├── viewmodel/            # Central WorkoutViewModel & UI State Management
-└── MainActivity.kt       # Application Entry Point & Navigation Host
+```bash
+git clone https://github.com/your-username/formfit.git
+cd formfit
 ```
 
+### 2 · Configure API keys
+
+Copy the example environment file and fill in your keys:
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` and set:
+```
+GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+Alternatively, enter your Gemini key directly in the app under **Profile → Settings → AI Vision API Key**.
+
+### 3 · Firebase Setup
+
+1. Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
+2. Add an Android app with package name `com.example`
+3. Download `google-services.json` and place it at `app/google-services.json`
+4. Enable **Cloud Firestore** in the Firebase console
+
+### 4 · Build & Run
+
+```bash
+./gradlew assembleDebug
+```
+
+Or open in Android Studio and press **Run ▶**.
+
 ---
 
-## 📄 License
+## Permissions Required
 
-Distributed under the MIT License. See `LICENSE` for more information.
+| Permission | Purpose |
+|---|---|
+| `CAMERA` | Live pose estimation and food photo capture |
+| `INTERNET` | Firebase leaderboard sync + Gemini API calls |
 
 ---
 
-<p align="center">
-  <b>Built with ❤️ using Kotlin, Jetpack Compose, and Google AI Studio</b>
-</p>
+## Project Structure — Key Files
+
+| File | Purpose |
+|---|---|
+| `PullUpBiomechanics.kt` | Full physics engine for pull-up: kinematics, VBT, muscle fatigue, thermal model |
+| `PushUpBiomechanics.kt` | Full physics engine for push-up: same depth, push-specific mechanics |
+| `PoseAnalyzer.kt` | BlazePose landmark → `PoseSkeleton` → angle-based form evaluation for all exercises |
+| `WorkoutViewModel.kt` | Central state: routes camera frames to correct biomechanics engine, manages XP/sessions |
+| `PracticeScreen.kt` | Camera preview + ML Kit integration + exercise-specific HUD overlays |
+| `GeminiFoodAnalyzer.kt` | Gemini Vision API integration for meal macro estimation |
+| `FirebaseLeaderboardRepository.kt` | Reads/writes XP and user data to Firestore |
+| `Database.kt` | Room schema: `WorkoutSession`, `UserStats`, `NutritionLog` |
+
+---
+
+## Gamification Formula
+
+```
+Session XP =
+  20 (base completion bonus)
+  + Σ { 5 XP per rep if form score ≥ 80, else 2 XP }
+  + 30 (high-form bonus if avg score ≥ 90% AND reps ≥ 5)
+
+Level threshold = 100 XP per level (linear)
+```
+
+---
+
+## Roadmap
+
+- [ ] Bicep Curl biomechanics engine
+- [ ] Shoulder Press biomechanics engine  
+- [ ] Deadlift posture analysis (hip hinge angle)
+- [ ] Full rep-by-rep post-workout analytics page
+- [ ] Offline leaderboard cache
+- [ ] Custom workout plan builder
+- [ ] Apple HealthKit / Google Health Connect integration
+
+---
+
+## Contributing
+
+Pull requests are welcome. For major changes, open an issue first to discuss what you'd like to change.
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/exercise-name-biomechanics`
+3. Commit your changes: `git commit -m 'Add bicep curl biomechanics engine'`
+4. Push to the branch: `git push origin feature/exercise-name-biomechanics`
+5. Open a pull request
+
+---
+
+## License
+
+This project is licensed under the MIT License — see [LICENSE](LICENSE) for details.
+
+---
+
+<div align="center">
+
+Built with ❤️ using Kotlin · Jetpack Compose · Google ML Kit · Gemini AI
+
+</div>

@@ -23,6 +23,8 @@ import kotlinx.coroutines.launch
 import com.example.cv.PoseSkeleton
 import com.example.cv.PullUpBiomechanics
 import com.example.cv.PullUpMetrics
+import com.example.cv.PushUpBiomechanics
+import com.example.cv.PushUpMetrics
 
 data class LeaderboardEntry(
     val name: String,
@@ -66,6 +68,7 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             repository.updateUserBodyProfile(profile)
             pullUpBiomechanics.updateBodyParams(profile.weightKg, profile.heightCm, profile.armLengthCm)
+            pushUpBiomechanics.updateBodyParams(profile.weightKg, profile.heightCm)
             com.example.audio.DuoSoundPlayer.playCorrect()
         }
     }
@@ -199,10 +202,17 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
     private val _isSoundEnabled = MutableStateFlow(true)
     val isSoundEnabled = _isSoundEnabled.asStateFlow()
 
+    private val _isTtsEnabled = MutableStateFlow(true)
+    val isTtsEnabled = _isTtsEnabled.asStateFlow()
+
     // Last completed session summary state (to display on summary screen)
     private val pullUpBiomechanics = PullUpBiomechanics()
     private val _pullUpMetrics = MutableStateFlow(PullUpMetrics())
     val pullUpMetrics = _pullUpMetrics.asStateFlow()
+
+    private val pushUpBiomechanics = PushUpBiomechanics()
+    private val _pushUpMetrics = MutableStateFlow(PushUpMetrics())
+    val pushUpMetrics = _pushUpMetrics.asStateFlow()
 
     private val _liveSpeedLossPct = MutableStateFlow(0)
     val liveSpeedLossPct = _liveSpeedLossPct.asStateFlow()
@@ -289,6 +299,7 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             userBodyProfile.collect { profile ->
                 pullUpBiomechanics.updateBodyParams(profile.weightKg, profile.heightCm, profile.armLengthCm)
+                pushUpBiomechanics.updateBodyParams(profile.weightKg, profile.heightCm)
             }
         }
     }
@@ -369,6 +380,8 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
             _currentScore.value = 100
             pullUpBiomechanics.reset()
             _pullUpMetrics.value = PullUpMetrics()
+            pushUpBiomechanics.reset()
+            _pushUpMetrics.value = PushUpMetrics()
             _exerciseState.value = if (_currentExercise.value == "Pull-up") "HANG" else if (_currentExercise.value == "Plank") "HOLDING" else "STAND"
 
             timerJob?.cancel()
@@ -398,6 +411,16 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun setTtsEnabled(enabled: Boolean) {
+        _isTtsEnabled.value = enabled
+        com.example.audio.TtsCoach.isTtsEnabled = enabled
+        if (enabled) {
+            com.example.audio.TtsCoach.speak("Voice coach enabled", isUrgent = true)
+        } else {
+            com.example.audio.TtsCoach.stop()
+        }
+    }
+
     fun startWorkout(exerciseType: String) {
         _currentExercise.value = exerciseType
         _isActiveSession.value = true
@@ -408,6 +431,8 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         _currentScore.value = 100
         pullUpBiomechanics.reset()
         _pullUpMetrics.value = PullUpMetrics()
+        pushUpBiomechanics.reset()
+        _pushUpMetrics.value = PushUpMetrics()
         _exerciseState.value = if (exerciseType == "Pull-up") "HANG" else if (exerciseType == "Plank") "HOLDING" else "STAND"
         _currentFeedback.value = when (exerciseType) {
             "Pull-up" -> "Grip the bar with overhand grip. Hang fully extended."
@@ -416,6 +441,10 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
             "Lunge" -> "Prepare to lunge. Keep hips square."
             "Plank" -> "Hold a solid plank. Keep body straight!"
             else -> "Ready!"
+        }
+
+        if (!_isVirtualCoachMode.value) {
+            com.example.audio.TtsCoach.speak(_currentFeedback.value, isUrgent = true)
         }
 
         timerJob?.cancel()
@@ -469,8 +498,45 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                 for (i in 0 until added) {
                     _repScores.value = _repScores.value + repScore
                 }
-                if (repScore >= 85) com.example.audio.DuoSoundPlayer.playCorrect()
-                else com.example.audio.DuoSoundPlayer.playMistake()
+                if (repScore >= 85) {
+                    com.example.audio.DuoSoundPlayer.playCorrect()
+                } else {
+                    com.example.audio.DuoSoundPlayer.playMistake()
+                }
+                metrics.lastRep?.chinVerdict?.let { verdict ->
+                    com.example.audio.TtsCoach.speak("${metrics.repCount}. $verdict", isUrgent = true)
+                }
+            }
+        } else if (skeleton != null && _currentExercise.value == "Push-up") {
+            val metrics = pushUpBiomechanics.processFrame(skeleton)
+            _pushUpMetrics.value = metrics
+            _exerciseState.value = metrics.phase
+            _liveSpeedLossPct.value = metrics.speedLossPct
+            _livePeakPowerW.value = metrics.peakPowerW
+            _liveVelocityMps.value = metrics.currentSpeedMps
+            
+            // Sync rep counter with biomechanics engine
+            if (metrics.repCount > _repCount.value) {
+                val added = metrics.repCount - _repCount.value
+                _repCount.value = metrics.repCount
+                val repScore = when (metrics.lastRep?.formVerdict) {
+                    "PERFECT FORM" -> 100
+                    "FULL REP" -> 95
+                    "CORE ISSUE", "TOO SHALLOW" -> 70
+                    "HIP SAG" -> 60
+                    else -> 85
+                }
+                for (i in 0 until added) {
+                    _repScores.value = _repScores.value + repScore
+                }
+                if (repScore >= 85) {
+                    com.example.audio.DuoSoundPlayer.playCorrect()
+                } else {
+                    com.example.audio.DuoSoundPlayer.playMistake()
+                }
+                metrics.lastRep?.formVerdict?.let { verdict ->
+                    com.example.audio.TtsCoach.speak("${metrics.repCount}. $verdict", isUrgent = true)
+                }
             }
         } else {
             _exerciseState.value = state
@@ -486,15 +552,20 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                 } else {
                     com.example.audio.DuoSoundPlayer.playMistake()
                 }
+                com.example.audio.TtsCoach.speak("Rep ${_repCount.value}. $feedback", isUrgent = true)
             }
         }
 
-        if (mistake != null && Math.random() > 0.7) { // limit spam
+        if (mistake != null) {
             val previousSize = _mistakesList.value.size
-            _mistakesList.value = _mistakesList.value + mistake
-            if (_mistakesList.value.size > previousSize) {
-                com.example.audio.DuoSoundPlayer.playMistake()
+            if (Math.random() > 0.7) {
+                _mistakesList.value = _mistakesList.value + mistake
+                if (_mistakesList.value.size > previousSize) {
+                    com.example.audio.DuoSoundPlayer.playMistake()
+                }
             }
+            val spokenCorrection = feedback.ifBlank { mistake }
+            com.example.audio.TtsCoach.speak(spokenCorrection, isUrgent = false, minIntervalMs = 3000L)
         }
     }
 
@@ -511,6 +582,7 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         timerJob?.cancel()
         
         com.example.audio.DuoSoundPlayer.playFanfare()
+        com.example.audio.TtsCoach.speak("Workout finished! Awesome effort.", isUrgent = true)
 
         val exercise = _currentExercise.value
         val reps = _repCount.value
@@ -563,15 +635,18 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         } else if (exercise == "Squat") {
             reps * (bodyWeight * 0.88 * 9.81 * 0.50) / 920.0
         } else if (exercise == "Push-up") {
-            reps * (bodyWeight * 0.64 * 9.81 * 0.35) / 920.0
+            if (_pushUpMetrics.value.totalKcal > 0.05) _pushUpMetrics.value.totalKcal
+            else reps * (bodyWeight * 0.64 * 9.81 * 0.35) / 920.0
         } else {
             reps * 0.45
         }
         _lastSessionCalories.value = kcal
-        val peakPower = if (exercise == "Pull-up") {
-            _pullUpMetrics.value.peakPowerW
-        } else {
-            if (_livePeakPowerW.value > 0) _livePeakPowerW.value else (_repScores.value.size * 45 + (bodyWeight * 4.5).toInt())
+        val peakPower = when (exercise) {
+            "Pull-up" -> _pullUpMetrics.value.peakPowerW
+            "Push-up" -> if (_pushUpMetrics.value.peakPowerW > 0) _pushUpMetrics.value.peakPowerW
+                         else if (_livePeakPowerW.value > 0) _livePeakPowerW.value
+                         else (_repScores.value.size * 35 + (bodyWeight * 3.5).toInt())
+            else -> if (_livePeakPowerW.value > 0) _livePeakPowerW.value else (_repScores.value.size * 45 + (bodyWeight * 4.5).toInt())
         }
         _lastSessionPeakPower.value = peakPower
 

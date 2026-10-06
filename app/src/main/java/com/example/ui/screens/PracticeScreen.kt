@@ -90,6 +90,7 @@ fun PracticeScreen(
     val exerciseType by viewModel.currentExercise.collectAsState()
     val repCount by viewModel.repCount.collectAsState()
     val pullUpMetrics by viewModel.pullUpMetrics.collectAsState()
+    val pushUpMetrics by viewModel.pushUpMetrics.collectAsState()
     val exerciseState by viewModel.exerciseState.collectAsState()
     val targetReps by viewModel.targetReps.collectAsState()
     val timerSeconds by viewModel.sessionSeconds.collectAsState()
@@ -105,8 +106,12 @@ fun PracticeScreen(
     val cameraPermissionState = rememberPermissionState(permission = Manifest.permission.CAMERA)
 
     // Auto-switch to workout complete when user hits target repeats during live camera workout
-    LaunchedEffect(repCount, pullUpMetrics.repCount, targetReps, isVirtual) {
-        val currentReps = if (exerciseType == "Pull-up") pullUpMetrics.repCount else repCount
+    LaunchedEffect(repCount, pullUpMetrics.repCount, pushUpMetrics.repCount, targetReps, isVirtual) {
+        val currentReps = when (exerciseType) {
+            "Pull-up" -> pullUpMetrics.repCount
+            "Push-up" -> pushUpMetrics.repCount
+            else -> repCount
+        }
         if (!isVirtual && targetReps > 0 && currentReps >= targetReps) {
             viewModel.stopAndSaveWorkout()
             onWorkoutFinished()
@@ -230,6 +235,8 @@ fun PracticeScreen(
                         )
                         if (exerciseType == "Pull-up") {
                             PullUpDashboardHUD(pullUpMetrics, targetReps)
+                        } else if (exerciseType == "Push-up") {
+                            PushUpDashboardHUD(pushUpMetrics, targetReps)
                         } else {
                             // Live In-Camera Overlay for Reps, State, VBT Telemetry and Feedback
                             Column(
@@ -1379,6 +1386,189 @@ fun PullUpDashboardHUD(metrics: com.example.cv.PullUpMetrics, targetReps: Int = 
                         contentAlignment = Alignment.Center
                     ) {
                         Text(rep.chinVerdict, color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PushUpDashboardHUD(metrics: com.example.cv.PushUpMetrics, targetReps: Int = 10) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(start = 16.dp, end = 16.dp, top = 56.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        // TOP HUD
+        Column {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    "${metrics.repCount}",
+                    fontSize = 64.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color.White
+                )
+                if (targetReps > 0) {
+                    Text(
+                        " / $targetReps",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White.copy(alpha = 0.75f),
+                        modifier = Modifier.padding(bottom = 14.dp, start = 4.dp)
+                    )
+                }
+                Text(
+                    " REPS",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier.padding(bottom = 14.dp, start = 8.dp)
+                )
+            }
+
+            if (targetReps > 0) {
+                val progress = (metrics.repCount.toFloat() / targetReps).coerceIn(0f, 1f)
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .width(180.dp)
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp)),
+                    color = DuoGreen,
+                    trackColor = Color.White.copy(alpha = 0.3f)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // Phase badge — color coded
+            Box(
+                modifier = Modifier
+                    .background(
+                        when (metrics.phase) {
+                            "PRESS"  -> DuoGreen
+                            "BOTTOM" -> DuoOrange
+                            "LOWER"  -> DuoBlue
+                            else     -> DuoInk  // PLANK
+                        },
+                        RoundedCornerShape(8.dp)
+                    )
+                    .padding(horizontal = 10.dp, vertical = 5.dp)
+            ) {
+                Text(
+                    "STATE: ${metrics.phase}",
+                    color = Color.White,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 13.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Live telemetry lines
+            Text("ELBOW: ${metrics.elbowAngle}°  ALIGN: ${metrics.bodyAlignmentAngle}°", color = Color.White, fontSize = 12.sp)
+            Text("${metrics.speedLossPct} % SPEED VS REP 1", color = Color.White, fontSize = 12.sp)
+            Text("${metrics.peakPowerW} W PEAK POWER", color = Color.White, fontSize = 12.sp)
+            Text(String.format("+%.2f °C PECS · MODELLED", metrics.pecsTempRise), color = Color.White, fontSize = 12.sp)
+            Text("${metrics.pecsFatiguedPct} % · ${metrics.tricepsFatiguedPct} % PECS · TRICEPS FATIGUED", color = Color.White, fontSize = 12.sp)
+            Text(String.format("≈ %.1f kcal / %.1f kJ WORK", metrics.totalKcal, metrics.totalHeatKj), color = Color.White, fontSize = 12.sp)
+        }
+
+        // BOTTOM HUD — Last Rep Report Card
+        if (metrics.lastRep != null) {
+            val rep = metrics.lastRep
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0x99000000), RoundedCornerShape(12.dp))
+                    .padding(12.dp)
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column {
+                        Text("REP ${rep.repNum}", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+
+                        // Inline quality badges
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (rep.fullLockout) {
+                                Box(
+                                    modifier = Modifier
+                                        .background(DuoGreen, RoundedCornerShape(4.dp))
+                                        .padding(4.dp)
+                                ) { Text("FULL LOCK-OUT", color = Color.White, fontSize = 10.sp) }
+                            }
+                            if (!rep.hipSagDetected) {
+                                Box(
+                                    modifier = Modifier
+                                        .background(DuoGreen, RoundedCornerShape(4.dp))
+                                        .padding(4.dp)
+                                ) { Text("CORE SOLID", color = Color.White, fontSize = 10.sp) }
+                            }
+                            if (rep.hipSagDetected) {
+                                Box(
+                                    modifier = Modifier
+                                        .background(DuoRed, RoundedCornerShape(4.dp))
+                                        .padding(4.dp)
+                                ) { Text("HIP SAG!", color = Color.White, fontSize = 10.sp) }
+                            }
+                        }
+
+                        // Timing breakdown
+                        Text(
+                            String.format(
+                                "down %.1f s hold %.1f s up %.1f s",
+                                rep.durationLowering, rep.durationHold, rep.durationPress
+                            ),
+                            color = Color.White,
+                            fontSize = 12.sp
+                        )
+                        // Performance metrics
+                        Text(
+                            String.format(
+                                "peak %.2f m/s  %d W  ≈ %.1f kcal",
+                                rep.peakPressVelocity,
+                                rep.peakPower.toInt(),
+                                rep.energyKcal
+                            ),
+                            color = Color.White,
+                            fontSize = 12.sp
+                        )
+                        Text(
+                            String.format(
+                                "min elbow %.0f°  speed loss %d %%",
+                                rep.minElbowAngle,
+                                rep.speedLossPct
+                            ),
+                            color = Color.White,
+                            fontSize = 12.sp
+                        )
+                    }
+
+                    // Verdict badge (right side)
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                when (rep.formVerdict) {
+                                    "PERFECT FORM" -> DuoGreen
+                                    "FULL REP"     -> DuoGreen
+                                    "CORE ISSUE", "HIP SAG" -> DuoRed
+                                    else           -> DuoOrange
+                                },
+                                RoundedCornerShape(8.dp)
+                            )
+                            .padding(12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            rep.formVerdict,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            fontSize = 11.sp
+                        )
                     }
                 }
             }

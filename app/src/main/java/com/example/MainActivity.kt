@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         com.example.audio.DuoSoundPlayer.init(this)
+        com.example.audio.TtsCoach.init(this)
         enableEdgeToEdge()
         setContent {
             FormFitTheme {
