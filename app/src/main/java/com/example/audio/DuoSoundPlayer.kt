@@ -20,18 +20,30 @@ object DuoSoundPlayer {
         appContextRef = WeakReference(context.applicationContext)
     }
 
-    private fun playRawResource(resId: Int) {
+    private fun playRawResource(resId: Int, onFallback: (() -> Unit)? = null) {
         if (!isSoundEnabled) return
-        val context = appContextRef?.get() ?: return
+        val context = appContextRef?.get() ?: run {
+            onFallback?.invoke()
+            return
+        }
         scope.launch {
             try {
                 val mp = MediaPlayer.create(context, resId)
-                mp.setOnCompletionListener {
-                    it.release()
+                if (mp != null) {
+                    mp.setOnCompletionListener {
+                        try { it.release() } catch (e: Exception) {}
+                    }
+                    mp.setOnErrorListener { player, _, _ ->
+                        try { player.release() } catch (e: Exception) {}
+                        onFallback?.invoke()
+                        true
+                    }
+                    mp.start()
+                } else {
+                    onFallback?.invoke()
                 }
-                mp.start()
             } catch (e: Exception) {
-                e.printStackTrace()
+                onFallback?.invoke()
             }
         }
     }
@@ -50,14 +62,11 @@ object DuoSoundPlayer {
     }
 
     fun playCorrect() {
-        val context = appContextRef?.get()
-        if (context != null) {
-            playRawResource(com.example.R.raw.duo_correct)
-        } else {
-            // Duo's cheerful success bell (e.g. major chord/intervals)
+        playRawResource(com.example.R.raw.duo_correct) {
+            // Duo's cheerful success bell fallback (C5 -> E5 -> G5)
             scope.launch {
                 playTone(
-                    frequencies = floatArrayOf(523.25f, 659.25f, 783.99f), // C5 -> E5 -> G5
+                    frequencies = floatArrayOf(523.25f, 659.25f, 783.99f),
                     durationsMs = intArrayOf(100, 100, 200),
                     type = WaveType.SINE,
                     volume = 0.6f
@@ -67,11 +76,8 @@ object DuoSoundPlayer {
     }
 
     fun playMistake() {
-        val context = appContextRef?.get()
-        if (context != null) {
-            playRawResource(com.example.R.raw.duo_wrong)
-        } else {
-            // Duo's warning buzzer (a cute, slightly sad slide/vibration)
+        playRawResource(com.example.R.raw.duo_wrong) {
+            // Duo's warning buzzer fallback
             scope.launch {
                 playTone(
                     frequencies = floatArrayOf(220f, 180f),
@@ -84,14 +90,11 @@ object DuoSoundPlayer {
     }
 
     fun playFanfare() {
-        val context = appContextRef?.get()
-        if (context != null) {
-            playRawResource(com.example.R.raw.duo_lesson_finished)
-        } else {
-            // High-energy fanfare when finishing a workout session
+        playRawResource(com.example.R.raw.duo_lesson_finished) {
+            // High-energy fanfare fallback (C5 -> E5 -> G5 -> C6)
             scope.launch {
                 playTone(
-                    frequencies = floatArrayOf(523.25f, 659.25f, 783.99f, 1046.50f), // C5 -> E5 -> G5 -> C6
+                    frequencies = floatArrayOf(523.25f, 659.25f, 783.99f, 1046.50f),
                     durationsMs = intArrayOf(120, 120, 120, 450),
                     type = WaveType.SINE,
                     volume = 0.7f
