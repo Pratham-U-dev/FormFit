@@ -369,6 +369,99 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun buyGemsPack(amount: Int, priceLabel: String) {
+        viewModelScope.launch {
+            repository.addGems(amount)
+            com.example.audio.DuoSoundPlayer.playFanfare()
+            com.example.audio.TtsCoach.speak("Awesome! $amount gems added to your account.", isUrgent = true)
+        }
+    }
+
+    fun buyStreakFreeze(onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val stats = repository.getUserStatsDirect()
+            if (stats.streakFreezesEquipped >= 2) {
+                onResult(false)
+                return@launch
+            }
+            val success = repository.spendGems(200)
+            if (success) {
+                repository.setStreakFreezes(stats.streakFreezesEquipped + 1)
+                com.example.audio.DuoSoundPlayer.playCorrect()
+                com.example.audio.TtsCoach.speak("Streak Freeze equipped!", isUrgent = true)
+                onResult(true)
+            } else {
+                com.example.audio.DuoSoundPlayer.playMistake()
+                com.example.audio.TtsCoach.speak("Not enough gems. Purchase more in the shop.", isUrgent = true)
+                onResult(false)
+            }
+        }
+    }
+
+    fun refillHeartsWithGems(onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val success = repository.spendGems(350)
+            if (success) {
+                repository.refillHearts()
+                com.example.audio.DuoSoundPlayer.playCorrect()
+                com.example.audio.TtsCoach.speak("Hearts fully restored to five!", isUrgent = true)
+                onResult(true)
+            } else {
+                com.example.audio.DuoSoundPlayer.playMistake()
+                com.example.audio.TtsCoach.speak("Not enough gems to refill hearts.", isUrgent = true)
+                onResult(false)
+            }
+        }
+    }
+
+    fun practiceToEarnHeart() {
+        viewModelScope.launch {
+            val stats = repository.getUserStatsDirect()
+            if (stats.hearts < stats.maxHearts) {
+                repository.updateHearts(stats.hearts + 1)
+                com.example.audio.DuoSoundPlayer.playCorrect()
+                com.example.audio.TtsCoach.speak("Practice complete! +1 heart earned.", isUrgent = true)
+            }
+        }
+    }
+
+    fun buyPowerUp(powerUpName: String, gemCost: Int, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val success = repository.spendGems(gemCost)
+            if (success) {
+                if (powerUpName.contains("Double XP", ignoreCase = true)) {
+                    repository.activateDoubleXp(30)
+                }
+                com.example.audio.DuoSoundPlayer.playCorrect()
+                com.example.audio.TtsCoach.speak("$powerUpName activated!", isUrgent = true)
+                onResult(true)
+            } else {
+                com.example.audio.DuoSoundPlayer.playMistake()
+                com.example.audio.TtsCoach.speak("Need more gems for this power up.", isUrgent = true)
+                onResult(false)
+            }
+        }
+    }
+
+    fun toggleSuperSubscription(activate: Boolean) {
+        viewModelScope.launch {
+            repository.setSuperSubscriber(activate)
+            if (activate) {
+                com.example.audio.DuoSoundPlayer.playFanfare()
+                com.example.audio.TtsCoach.speak("Welcome to Super FormFit! Unlimited hearts unlocked.", isUrgent = true)
+            } else {
+                com.example.audio.DuoSoundPlayer.playClick()
+            }
+        }
+    }
+
+    fun cheerFriend(friendName: String) {
+        viewModelScope.launch {
+            com.example.audio.DuoSoundPlayer.playCorrect()
+            com.example.audio.TtsCoach.speak("Cheered $friendName's streak!", isUrgent = true)
+        }
+    }
+
     fun setVirtualCoachMode(enabled: Boolean) {
         _isVirtualCoachMode.value = enabled
         if (!enabled) {

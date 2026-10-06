@@ -116,6 +116,46 @@ class FormFitRepository(
         userStatsDao.insertOrUpdateStats(current.copy(streakDays = streak))
     }
 
+    suspend fun addGems(amount: Int) {
+        val current = getUserStatsDirect()
+        userStatsDao.insertOrUpdateStats(current.copy(gems = (current.gems + amount).coerceAtLeast(0)))
+    }
+
+    suspend fun spendGems(amount: Int): Boolean {
+        val current = getUserStatsDirect()
+        if (current.gems >= amount) {
+            userStatsDao.insertOrUpdateStats(current.copy(gems = current.gems - amount))
+            return true
+        }
+        return false
+    }
+
+    suspend fun updateHearts(newHearts: Int) {
+        val current = getUserStatsDirect()
+        userStatsDao.insertOrUpdateStats(current.copy(hearts = newHearts.coerceIn(0, current.maxHearts)))
+    }
+
+    suspend fun refillHearts() {
+        val current = getUserStatsDirect()
+        userStatsDao.insertOrUpdateStats(current.copy(hearts = current.maxHearts))
+    }
+
+    suspend fun setStreakFreezes(count: Int) {
+        val current = getUserStatsDirect()
+        userStatsDao.insertOrUpdateStats(current.copy(streakFreezesEquipped = count.coerceIn(0, 2)))
+    }
+
+    suspend fun setSuperSubscriber(isSuper: Boolean) {
+        val current = getUserStatsDirect()
+        userStatsDao.insertOrUpdateStats(current.copy(isSuperSubscriber = isSuper, hearts = if (isSuper) 5 else current.hearts))
+    }
+
+    suspend fun activateDoubleXp(durationMinutes: Int = 30) {
+        val current = getUserStatsDirect()
+        val until = System.currentTimeMillis() + durationMinutes * 60 * 1000L
+        userStatsDao.insertOrUpdateStats(current.copy(doubleXpActiveUntil = until))
+    }
+
     suspend fun unlockBadge(badgeId: String) {
         val current = getUserStatsDirect()
         val badges = current.unlockedBadgesCsv.split(",").filter { it.isNotEmpty() }.toMutableSet()

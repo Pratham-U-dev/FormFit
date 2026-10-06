@@ -25,9 +25,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -41,6 +39,9 @@ import com.example.R
 import com.example.ui.components.DuoButton
 import com.example.ui.components.DuoCard
 import com.example.ui.components.DuoProgressBar
+import com.example.ui.components.HeartsDialog
+import com.example.ui.components.ShopDialog
+import com.example.ui.components.StreakDialog
 import com.example.ui.theme.DuoBlue
 import com.example.ui.theme.DuoBlueDark
 import com.example.ui.theme.DuoBorder
@@ -62,6 +63,32 @@ fun DashboardScreen(
 ) {
     val stats by viewModel.userStats.collectAsState()
     val sessions by viewModel.allSessions.collectAsState()
+
+    var showStreakDialog by remember { mutableStateOf(false) }
+    var showShopDialog by remember { mutableStateOf(false) }
+    var showHeartsDialog by remember { mutableStateOf(false) }
+
+    if (showStreakDialog) {
+        StreakDialog(
+            viewModel = viewModel,
+            onDismiss = { showStreakDialog = false },
+            onStartWorkout = { onStartWorkout("Pull-up") }
+        )
+    }
+
+    if (showShopDialog) {
+        ShopDialog(
+            viewModel = viewModel,
+            onDismiss = { showShopDialog = false }
+        )
+    }
+
+    if (showHeartsDialog) {
+        HeartsDialog(
+            viewModel = viewModel,
+            onDismiss = { showHeartsDialog = false }
+        )
+    }
 
     LazyColumn(
         modifier = modifier
@@ -97,12 +124,15 @@ fun DashboardScreen(
                         modifier = Modifier
                             .background(Color(0xFFFFF2E0), shape = RoundedCornerShape(16.dp))
                             .border(1.5.dp, Color(0xFFFFE0B2), shape = RoundedCornerShape(16.dp))
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable { showStreakDialog = true }
                             .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .testTag("top_streak_pill")
                     ) {
                         Text(text = "🔥", fontSize = 14.sp)
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "${stats.streakDays}",
+                            text = "${if (stats.streakDays > 0) stats.streakDays else 3}",
                             color = DuoOrange,
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 13.sp
@@ -115,12 +145,15 @@ fun DashboardScreen(
                         modifier = Modifier
                             .background(Color(0xFFF5F3FF), shape = RoundedCornerShape(16.dp))
                             .border(1.5.dp, Color(0xFFEDE9FE), shape = RoundedCornerShape(16.dp))
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable { showShopDialog = true }
                             .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .testTag("top_gems_pill")
                     ) {
                         Text(text = "💎", fontSize = 14.sp)
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "${stats.currentXp}",
+                            text = "${stats.gems}",
                             color = Color(0xFF8B5CF6),
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 13.sp
@@ -133,12 +166,15 @@ fun DashboardScreen(
                         modifier = Modifier
                             .background(Color(0xFFFEF2F2), shape = RoundedCornerShape(16.dp))
                             .border(1.5.dp, Color(0xFFFEE2E2), shape = RoundedCornerShape(16.dp))
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable { showHeartsDialog = true }
                             .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .testTag("top_hearts_pill")
                     ) {
-                        Text(text = "❤️", fontSize = 14.sp)
+                        Text(text = if (stats.isSuperSubscriber) "💖" else "❤️", fontSize = 14.sp)
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "5/5",
+                            text = if (stats.isSuperSubscriber) "∞" else "${stats.hearts}/${stats.maxHearts}",
                             color = Color(0xFFEF4444),
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 13.sp
