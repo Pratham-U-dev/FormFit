@@ -292,6 +292,9 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
 
     private var timerJob: Job? = null
 
+    private val _nextHeartRegenSecondsRemaining = MutableStateFlow<Int?>(null)
+    val nextHeartRegenSecondsRemaining = _nextHeartRegenSecondsRemaining.asStateFlow()
+
     init {
         // Observe all sessions to unlock progressive badges
         viewModelScope.launch {
@@ -306,12 +309,19 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                 pushUpBiomechanics.updateBodyParams(profile.weightKg, profile.heightCm)
             }
         }
-        // Passive heart regeneration check
+        // Passive heart regeneration check & live ticker
         viewModelScope.launch {
-            repository.getUserStatsDirect()
             while (isActive) {
-                delay(60000L) // Check passive heart recovery every minute
-                repository.getUserStatsDirect()
+                val stats = repository.getUserStatsDirect()
+                if (stats.hearts < stats.maxHearts && stats.lastHeartRefillTimestamp > 0L) {
+                    val elapsed = System.currentTimeMillis() - stats.lastHeartRefillTimestamp
+                    val fiveMinutesMillis = 5 * 60 * 1000L
+                    val remainingMs = (fiveMinutesMillis - (elapsed % fiveMinutesMillis)).coerceAtLeast(0L)
+                    _nextHeartRegenSecondsRemaining.value = (remainingMs / 1000L).toInt()
+                } else {
+                    _nextHeartRegenSecondsRemaining.value = null
+                }
+                delay(1000L)
             }
         }
     }
@@ -586,6 +596,10 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
             else -> "Ready!"
         }
 
+        viewModelScope.launch {
+            repository.consumeHeartForExerciseSet()
+        }
+
         if (!_isVirtualCoachMode.value) {
             com.example.audio.TtsCoach.speak(_currentFeedback.value, isUrgent = true)
         }
@@ -636,17 +650,16 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
             _livePeakPowerW.value = metrics.peakPowerW
             _liveVelocityMps.value = metrics.currentSpeedMps
 
-            // Immediate rep rejection audio feedback & penalty
+            // Immediate rep rejection audio feedback
             if (metrics.lastRepRejected && metrics.rejectionReason != null) {
                 val now = System.currentTimeMillis()
-                if (metrics.rejectionReason != lastSpokenRejection || (now - lastRejectionTimestamp) > 4000L) {
+                if (metrics.rejectionReason != lastSpokenRejection || (now - lastRejectionTimestamp) > 8500L) {
                     lastSpokenRejection = metrics.rejectionReason
                     lastRejectionTimestamp = now
                     com.example.audio.DuoSoundPlayer.playMistake()
                     com.example.audio.TtsCoach.speak("Rep rejected: ${metrics.rejectionReason}", isUrgent = true)
                     _currentFeedback.value = "⚠️ Rep rejected: ${metrics.rejectionReason}"
-                    _currentScore.value = (_currentScore.value - 12).coerceAtLeast(40)
-                    deductHeartOnMistake()
+                    _currentScore.value = (_currentScore.value - 8).coerceAtLeast(40)
                 }
             }
             
@@ -675,17 +688,16 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
             _livePeakPowerW.value = metrics.peakPowerW
             _liveVelocityMps.value = metrics.currentSpeedMps
 
-            // Immediate rep rejection audio feedback & penalty
+            // Immediate rep rejection audio feedback
             if (metrics.lastRepRejected && metrics.rejectionReason != null) {
                 val now = System.currentTimeMillis()
-                if (metrics.rejectionReason != lastSpokenRejection || (now - lastRejectionTimestamp) > 4000L) {
+                if (metrics.rejectionReason != lastSpokenRejection || (now - lastRejectionTimestamp) > 8500L) {
                     lastSpokenRejection = metrics.rejectionReason
                     lastRejectionTimestamp = now
                     com.example.audio.DuoSoundPlayer.playMistake()
                     com.example.audio.TtsCoach.speak("Rep rejected: ${metrics.rejectionReason}", isUrgent = true)
                     _currentFeedback.value = "⚠️ Rep rejected: ${metrics.rejectionReason}"
-                    _currentScore.value = (_currentScore.value - 12).coerceAtLeast(40)
-                    deductHeartOnMistake()
+                    _currentScore.value = (_currentScore.value - 8).coerceAtLeast(40)
                 }
             }
             
@@ -707,9 +719,6 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                     com.example.audio.DuoSoundPlayer.playCorrect()
                 } else {
                     com.example.audio.DuoSoundPlayer.playMistake()
-                    if (repScore < 75) {
-                        deductHeartOnMistake()
-                    }
                 }
                 metrics.lastRep?.formVerdict?.let { verdict ->
                     com.example.audio.TtsCoach.speak("${metrics.repCount}. $verdict", isUrgent = true)
@@ -728,25 +737,14 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                     com.example.audio.DuoSoundPlayer.playCorrect()
                 } else {
                     com.example.audio.DuoSoundPlayer.playMistake()
-                    if (score < 75) {
-                        deductHeartOnMistake()
-                    }
                 }
                 com.example.audio.TtsCoach.speak("Rep ${_repCount.value}. $feedback", isUrgent = true)
             }
         }
 
         if (mistake != null) {
-            val previousSize = _mistakesList.value.size
-            if (Math.random() > 0.7) {
-                _mistakesList.value = _mistakesList.value + mistake
-                if (_mistakesList.value.size > previousSize) {
-                    com.example.audio.DuoSoundPlayer.playMistake()
-                    deductHeartOnMistake()
-                }
-            }
             val spokenCorrection = feedback.ifBlank { mistake }
-            com.example.audio.TtsCoach.speak(spokenCorrection, isUrgent = false, minIntervalMs = 3000L)
+            com.example.audio.TtsCoach.speak(spokenCorrection, isUrgent = false, minIntervalMs = 8500L)
         }
     }
 

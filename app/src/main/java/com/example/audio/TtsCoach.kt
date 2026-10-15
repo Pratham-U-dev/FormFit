@@ -41,18 +41,18 @@ object TtsCoach : TextToSpeech.OnInitListener {
         }
     }
 
-    fun speak(text: String, isUrgent: Boolean = false, minIntervalMs: Long = 2800L) {
+    fun speak(text: String, isUrgent: Boolean = false, minIntervalMs: Long = 8500L) {
         if (!isTtsEnabled || !isInitialized || text.isBlank()) return
 
         val now = System.currentTimeMillis()
         val cleanText = text.trim()
 
-        // Avoid repeating the exact identical advice within 4 seconds unless flagged as urgent
-        if (!isUrgent && cleanText.equals(lastSpokenText, ignoreCase = true) && (now - lastSpokenTimestamp) < 4000L) {
+        // Avoid repeating identical advice within 8.5 seconds unless flagged as urgent
+        if (!isUrgent && cleanText.equals(lastSpokenText, ignoreCase = true) && (now - lastSpokenTimestamp) < 8500L) {
             return
         }
 
-        // Throttle rapid consecutive speech to avoid auditory confusion during movement
+        // Throttle rapid consecutive speech to avoid auditory confusion during movement (8-10 seconds)
         if (!isUrgent && (now - lastSpokenTimestamp) < minIntervalMs) {
             return
         }

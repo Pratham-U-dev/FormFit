@@ -1431,6 +1431,8 @@ private fun parsePoseLandmarks(pose: com.google.mlkit.vision.pose.Pose): PoseSke
 
 @Composable
 fun PullUpDashboardHUD(metrics: com.example.cv.PullUpMetrics, targetReps: Int = 10) {
+    var showTelemetryDetails by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1440,11 +1442,11 @@ fun PullUpDashboardHUD(metrics: com.example.cv.PullUpMetrics, targetReps: Int = 
         // TOP HUD
         Column {
             Row(verticalAlignment = Alignment.Bottom) {
-                Text("${metrics.repCount}", fontSize = 64.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                Text("${metrics.repCount}", fontSize = 56.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
                 if (targetReps > 0) {
-                    Text(" / $targetReps", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.75f), modifier = Modifier.padding(bottom = 14.dp, start = 4.dp))
+                    Text(" / $targetReps", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.75f), modifier = Modifier.padding(bottom = 10.dp, start = 4.dp))
                 }
-                Text(" REPS", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(bottom = 14.dp, start = 8.dp))
+                Text(" REPS", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(bottom = 10.dp, start = 8.dp))
             }
             
             if (targetReps > 0) {
@@ -1458,49 +1460,68 @@ fun PullUpDashboardHUD(metrics: com.example.cv.PullUpMetrics, targetReps: Int = 
                     color = DuoGreen,
                     trackColor = Color.White.copy(alpha = 0.3f)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
             }
 
             if (!metrics.isHandsOverhead || metrics.phase == "AWAITING_OVERHEAD") {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(DuoRed, RoundedCornerShape(8.dp))
+                        .background(Color(0xAAEF5350), RoundedCornerShape(8.dp))
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Text("⚠️ Hands must be overhead to grip the bar", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(4.dp))
             } else if (metrics.lastRepRejected && metrics.rejectionReason != null) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(DuoRed, RoundedCornerShape(8.dp))
+                        .background(Color(0xAAEF5350), RoundedCornerShape(8.dp))
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Text("❌ Rep rejected: ${metrics.rejectionReason}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(4.dp))
             }
             
-            Box(modifier = Modifier
-                .background(
-                    if (metrics.phase == "HOLD" || metrics.phase == "TOP") DuoOrange 
-                    else if (metrics.phase == "PULL") DuoGreen 
-                    else if (metrics.phase == "AWAITING_OVERHEAD") DuoRed
-                    else DuoInk, 
-                    RoundedCornerShape(8.dp)
-                )
-                .padding(horizontal = 10.dp, vertical = 5.dp)) {
-                Text("STATE: ${metrics.phase}", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(modifier = Modifier
+                    .background(
+                        if (metrics.phase == "HOLD" || metrics.phase == "TOP") DuoOrange 
+                        else if (metrics.phase == "PULL") DuoGreen 
+                        else if (metrics.phase == "AWAITING_OVERHEAD") Color(0xAAEF5350)
+                        else DuoInk, 
+                        RoundedCornerShape(8.dp)
+                    )
+                    .padding(horizontal = 10.dp, vertical = 5.dp)) {
+                    Text("STATE: ${metrics.phase}", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                }
+
+                TextButton(onClick = { showTelemetryDetails = !showTelemetryDetails }) {
+                    Text(if (showTelemetryDetails) "Minimize Details ▲" else "Telemetry & Muscle ▼", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
             }
             
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("${metrics.speedLossPct} % SPEED VS REP 1", color = Color.White, fontSize = 12.sp)
-            Text("${metrics.peakPowerW} W PEAK POWER", color = Color.White, fontSize = 12.sp)
-            Text(String.format("+%.2f °C LATS · MODELLED", metrics.latsTempRise), color = Color.White, fontSize = 12.sp)
-            Text("${metrics.latsFatiguedPct} % · ${metrics.bicepsFatiguedPct} % LATS · BICEPS FATIGUED", color = Color.White, fontSize = 12.sp)
-            Text(String.format("≈ %.1f kcal / %.1f kJ WORK", metrics.totalKcal, metrics.totalHeatKj), color = Color.White, fontSize = 12.sp)
+            if (showTelemetryDetails) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0x88000000), RoundedCornerShape(8.dp))
+                        .padding(8.dp)
+                ) {
+                    Text("${metrics.speedLossPct} % SPEED VS REP 1", color = Color.White, fontSize = 11.sp)
+                    Text("${metrics.peakPowerW} W PEAK POWER", color = Color.White, fontSize = 11.sp)
+                    Text(String.format("+%.2f °C LATS · MODELLED", metrics.latsTempRise), color = Color.White, fontSize = 11.sp)
+                    Text("${metrics.latsFatiguedPct} % · ${metrics.bicepsFatiguedPct} % LATS · BICEPS FATIGUED", color = Color.White, fontSize = 11.sp)
+                    Text(String.format("≈ %.1f kcal / %.1f kJ WORK", metrics.totalKcal, metrics.totalHeatKj), color = Color.White, fontSize = 11.sp)
+                }
+            }
         }
         
         // BOTTOM HUD
@@ -1510,26 +1531,24 @@ fun PullUpDashboardHUD(metrics: com.example.cv.PullUpMetrics, targetReps: Int = 
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color(0x99000000), RoundedCornerShape(12.dp))
-                    .padding(12.dp)
+                    .padding(10.dp)
             ) {
-                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                    Column {
-                        Text("REP ${rep.repNum}", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("REP ${rep.repNum}", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            if (rep.fullLockout) Box(modifier = Modifier.background(DuoGreen, RoundedCornerShape(4.dp)).padding(4.dp)) { Text("FULL LOCK-OUT", color = Color.White, fontSize = 10.sp) }
-                            if (rep.swayCm < 10) Box(modifier = Modifier.background(DuoGreen, RoundedCornerShape(4.dp)).padding(4.dp)) { Text("STRICT NO SWING", color = Color.White, fontSize = 10.sp) }
+                            if (rep.fullLockout) Box(modifier = Modifier.background(DuoGreen, RoundedCornerShape(4.dp)).padding(3.dp)) { Text("LOCK-OUT", color = Color.White, fontSize = 9.sp) }
+                            if (rep.swayCm < 10) Box(modifier = Modifier.background(DuoGreen, RoundedCornerShape(4.dp)).padding(3.dp)) { Text("STRICT", color = Color.White, fontSize = 9.sp) }
                         }
-                        Text(String.format("up %.1f s hold %.1f s down %.1f s", rep.durationConcentric, rep.durationHold, rep.durationEccentric), color = Color.White, fontSize = 12.sp)
-                        Text(String.format("peak %.2f m/s %d W ≈ %.1f kcal", rep.peakVelocity, rep.peakPower.toInt(), rep.energyKcal), color = Color.White, fontSize = 12.sp)
-                        Text(String.format("speed loss %d %% sway %.0f cm", rep.speedLossPct, rep.swayCm), color = Color.White, fontSize = 12.sp)
+                        Text(String.format("up %.1f s | down %.1f s | %d W", rep.durationConcentric, rep.durationEccentric, rep.peakPower.toInt()), color = Color.White, fontSize = 11.sp)
                     }
                     Box(
                         modifier = Modifier
                             .background(if (rep.fullLockout) DuoGreen else DuoOrange, RoundedCornerShape(8.dp))
-                            .padding(12.dp),
+                            .padding(8.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(rep.chinVerdict, color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                        Text(rep.chinVerdict, color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, fontSize = 10.sp)
                     }
                 }
             }
@@ -1539,6 +1558,8 @@ fun PullUpDashboardHUD(metrics: com.example.cv.PullUpMetrics, targetReps: Int = 
 
 @Composable
 fun PushUpDashboardHUD(metrics: com.example.cv.PushUpMetrics, targetReps: Int = 10) {
+    var showTelemetryDetails by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1550,25 +1571,25 @@ fun PushUpDashboardHUD(metrics: com.example.cv.PushUpMetrics, targetReps: Int = 
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
                     "${metrics.repCount}",
-                    fontSize = 64.sp,
+                    fontSize = 56.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = Color.White
                 )
                 if (targetReps > 0) {
                     Text(
                         " / $targetReps",
-                        fontSize = 24.sp,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White.copy(alpha = 0.75f),
-                        modifier = Modifier.padding(bottom = 14.dp, start = 4.dp)
+                        modifier = Modifier.padding(bottom = 10.dp, start = 4.dp)
                     )
                 }
                 Text(
                     " REPS",
-                    fontSize = 16.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
-                    modifier = Modifier.padding(bottom = 14.dp, start = 8.dp)
+                    modifier = Modifier.padding(bottom = 10.dp, start = 8.dp)
                 )
             }
 
@@ -1583,63 +1604,79 @@ fun PushUpDashboardHUD(metrics: com.example.cv.PushUpMetrics, targetReps: Int = 
                     color = DuoGreen,
                     trackColor = Color.White.copy(alpha = 0.3f)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
             }
 
             if (!metrics.isPlankPosture || metrics.phase == "AWAITING_PLANK") {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(DuoRed, RoundedCornerShape(8.dp))
+                        .background(Color(0xAAEF5350), RoundedCornerShape(8.dp))
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Text("⚠️ Assume horizontal plank on the floor", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(4.dp))
             } else if (metrics.lastRepRejected && metrics.rejectionReason != null) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(DuoRed, RoundedCornerShape(8.dp))
+                        .background(Color(0xAAEF5350), RoundedCornerShape(8.dp))
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Text("❌ Rep rejected: ${metrics.rejectionReason}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(4.dp))
             }
 
-            // Phase badge — color coded
-            Box(
-                modifier = Modifier
-                    .background(
-                        when (metrics.phase) {
-                            "PRESS"  -> DuoGreen
-                            "BOTTOM" -> DuoOrange
-                            "LOWER"  -> DuoBlue
-                            "AWAITING_PLANK" -> DuoRed
-                            else     -> DuoInk  // PLANK
-                        },
-                        RoundedCornerShape(8.dp)
-                    )
-                    .padding(horizontal = 10.dp, vertical = 5.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    "STATE: ${metrics.phase}",
-                    color = Color.White,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 13.sp
-                )
+                Box(
+                    modifier = Modifier
+                        .background(
+                            when (metrics.phase) {
+                                "PRESS"  -> DuoGreen
+                                "BOTTOM" -> DuoOrange
+                                "LOWER"  -> DuoBlue
+                                "AWAITING_PLANK" -> Color(0xAAEF5350)
+                                else     -> DuoInk  // PLANK
+                            },
+                            RoundedCornerShape(8.dp)
+                        )
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        "STATE: ${metrics.phase}",
+                        color = Color.White,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 12.sp
+                    )
+                }
+
+                TextButton(onClick = { showTelemetryDetails = !showTelemetryDetails }) {
+                    Text(if (showTelemetryDetails) "Minimize Details ▲" else "Telemetry & Muscle ▼", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Live telemetry lines
-            Text("ELBOW: ${metrics.elbowAngle}°  ALIGN: ${metrics.bodyAlignmentAngle}°", color = Color.White, fontSize = 12.sp)
-            Text("${metrics.speedLossPct} % SPEED VS REP 1", color = Color.White, fontSize = 12.sp)
-            Text("${metrics.peakPowerW} W PEAK POWER", color = Color.White, fontSize = 12.sp)
-            Text(String.format("+%.2f °C PECS · MODELLED", metrics.pecsTempRise), color = Color.White, fontSize = 12.sp)
-            Text("${metrics.pecsFatiguedPct} % · ${metrics.tricepsFatiguedPct} % PECS · TRICEPS FATIGUED", color = Color.White, fontSize = 12.sp)
-            Text(String.format("≈ %.1f kcal / %.1f kJ WORK", metrics.totalKcal, metrics.totalHeatKj), color = Color.White, fontSize = 12.sp)
+            if (showTelemetryDetails) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0x88000000), RoundedCornerShape(8.dp))
+                        .padding(8.dp)
+                ) {
+                    Text("ELBOW: ${metrics.elbowAngle}°  ALIGN: ${metrics.bodyAlignmentAngle}°", color = Color.White, fontSize = 11.sp)
+                    Text("${metrics.speedLossPct} % SPEED VS REP 1", color = Color.White, fontSize = 11.sp)
+                    Text("${metrics.peakPowerW} W PEAK POWER", color = Color.White, fontSize = 11.sp)
+                    Text(String.format("+%.2f °C PECS · MODELLED", metrics.pecsTempRise), color = Color.White, fontSize = 11.sp)
+                    Text("${metrics.pecsFatiguedPct} % · ${metrics.tricepsFatiguedPct} % PECS · TRICEPS FATIGUED", color = Color.White, fontSize = 11.sp)
+                    Text(String.format("≈ %.1f kcal / %.1f kJ WORK", metrics.totalKcal, metrics.totalHeatKj), color = Color.White, fontSize = 11.sp)
+                }
+            }
         }
 
         // BOTTOM HUD — Last Rep Report Card
@@ -1649,84 +1686,59 @@ fun PushUpDashboardHUD(metrics: com.example.cv.PushUpMetrics, targetReps: Int = 
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color(0x99000000), RoundedCornerShape(12.dp))
-                    .padding(12.dp)
+                    .padding(10.dp)
             ) {
                 Row(
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        Text("REP ${rep.repNum}", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("REP ${rep.repNum}", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
 
-                        // Inline quality badges
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             if (rep.fullLockout) {
                                 Box(
                                     modifier = Modifier
                                         .background(DuoGreen, RoundedCornerShape(4.dp))
-                                        .padding(4.dp)
-                                ) { Text("FULL LOCK-OUT", color = Color.White, fontSize = 10.sp) }
+                                        .padding(3.dp)
+                                ) { Text("LOCK-OUT", color = Color.White, fontSize = 9.sp) }
                             }
                             if (!rep.hipSagDetected) {
                                 Box(
                                     modifier = Modifier
                                         .background(DuoGreen, RoundedCornerShape(4.dp))
-                                        .padding(4.dp)
-                                ) { Text("CORE SOLID", color = Color.White, fontSize = 10.sp) }
+                                        .padding(3.dp)
+                                ) { Text("CORE", color = Color.White, fontSize = 9.sp) }
                             }
                             if (rep.hipSagDetected) {
                                 Box(
                                     modifier = Modifier
-                                        .background(DuoRed, RoundedCornerShape(4.dp))
-                                        .padding(4.dp)
-                                ) { Text("HIP SAG!", color = Color.White, fontSize = 10.sp) }
+                                        .background(Color(0xAAEF5350), RoundedCornerShape(4.dp))
+                                        .padding(3.dp)
+                                ) { Text("HIP SAG!", color = Color.White, fontSize = 9.sp) }
                             }
                         }
 
-                        // Timing breakdown
                         Text(
-                            String.format(
-                                "down %.1f s hold %.1f s up %.1f s",
-                                rep.durationLowering, rep.durationHold, rep.durationPress
-                            ),
+                            String.format("down %.1f s | up %.1f s | %d W", rep.durationLowering, rep.durationPress, rep.peakPower.toInt()),
                             color = Color.White,
-                            fontSize = 12.sp
-                        )
-                        // Performance metrics
-                        Text(
-                            String.format(
-                                "peak %.2f m/s  %d W  ≈ %.1f kcal",
-                                rep.peakPressVelocity,
-                                rep.peakPower.toInt(),
-                                rep.energyKcal
-                            ),
-                            color = Color.White,
-                            fontSize = 12.sp
-                        )
-                        Text(
-                            String.format(
-                                "min elbow %.0f°  speed loss %d %%",
-                                rep.minElbowAngle,
-                                rep.speedLossPct
-                            ),
-                            color = Color.White,
-                            fontSize = 12.sp
+                            fontSize = 11.sp
                         )
                     }
 
-                    // Verdict badge (right side)
                     Box(
                         modifier = Modifier
                             .background(
                                 when (rep.formVerdict) {
                                     "PERFECT FORM" -> DuoGreen
                                     "FULL REP"     -> DuoGreen
-                                    "CORE ISSUE", "HIP SAG" -> DuoRed
+                                    "CORE ISSUE", "HIP SAG" -> Color(0xAAEF5350)
                                     else           -> DuoOrange
                                 },
                                 RoundedCornerShape(8.dp)
                             )
-                            .padding(12.dp),
+                            .padding(8.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -1734,7 +1746,7 @@ fun PushUpDashboardHUD(metrics: com.example.cv.PushUpMetrics, targetReps: Int = 
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,
-                            fontSize = 11.sp
+                            fontSize = 10.sp
                         )
                     }
                 }

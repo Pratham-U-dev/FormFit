@@ -41,7 +41,12 @@ class FormFitRepository(
     }
 
     val userStats: Flow<UserStats> = userStatsDao.getUserStats().map { stats ->
-        stats ?: UserStats() // Default stats if null
+        val current = stats ?: UserStats()
+        if (current.maxHearts < 25) {
+            current.copy(hearts = 25, maxHearts = 25)
+        } else {
+            current
+        }
     }
 
     suspend fun insertSession(session: WorkoutSession) {
@@ -51,7 +56,11 @@ class FormFitRepository(
     }
 
     suspend fun getUserStatsDirect(): UserStats {
-        val current = userStatsDao.getUserStatsDirect() ?: UserStats()
+        var current = userStatsDao.getUserStatsDirect() ?: UserStats()
+        if (current.maxHearts < 25) {
+            current = current.copy(hearts = 25, maxHearts = 25, lastHeartRefillTimestamp = 0L)
+            userStatsDao.insertOrUpdateStats(current)
+        }
         return checkPassiveHeartRegeneration(current)
     }
 
@@ -60,7 +69,7 @@ class FormFitRepository(
             return current
         }
         val now = System.currentTimeMillis()
-        val thirtyMinutesMillis = 30 * 60 * 1000L
+        val fiveMinutesMillis = 5 * 60 * 1000L // 1 heart regenerated every 5 minutes
         if (current.lastHeartRefillTimestamp == 0L) {
             val updated = current.copy(lastHeartRefillTimestamp = now)
             userStatsDao.insertOrUpdateStats(updated)
@@ -68,10 +77,10 @@ class FormFitRepository(
         }
 
         val elapsed = now - current.lastHeartRefillTimestamp
-        val heartsToRestore = (elapsed / thirtyMinutesMillis).toInt()
+        val heartsToRestore = (elapsed / fiveMinutesMillis).toInt()
         if (heartsToRestore > 0) {
             val newHearts = (current.hearts + heartsToRestore).coerceAtMost(current.maxHearts)
-            val remainderMillis = elapsed % thirtyMinutesMillis
+            val remainderMillis = elapsed % fiveMinutesMillis
             val newTimestamp = now - remainderMillis
             val updated = current.copy(
                 hearts = newHearts,
@@ -178,24 +187,25 @@ class FormFitRepository(
         return false
     }
 
-    suspend fun deductHeartOnMistake(): Pair<Boolean, Int> {
+    suspend fun consumeHeartForExerciseSet(): Pair<Boolean, Int> {
         val current = getUserStatsDirect()
         if (current.isSuperSubscriber) {
-            return Pair(false, current.hearts) // Unlimited hearts!
-        }
-        if (current.formShieldActive) {
-            // Shield absorbed the mistake
-            userStatsDao.insertOrUpdateStats(current.copy(formShieldActive = false))
-            return Pair(false, current.hearts)
+            return Pair(true, current.hearts)
         }
         if (current.hearts > 0) {
             val newHearts = (current.hearts - 1).coerceAtLeast(0)
             val now = System.currentTimeMillis()
-            val newTimestamp = if (current.hearts == current.maxHearts) now else current.lastHeartRefillTimestamp
+            val newTimestamp = if (current.hearts >= current.maxHearts) now else current.lastHeartRefillTimestamp
             userStatsDao.insertOrUpdateStats(current.copy(hearts = newHearts, lastHeartRefillTimestamp = newTimestamp))
             return Pair(true, newHearts)
         }
-        return Pair(true, 0)
+        return Pair(false, 0)
+    }
+
+    suspend fun deductHeartOnMistake(): Pair<Boolean, Int> {
+        // Mistakes no longer deduct hearts - hearts represent stamina/energy per exercise set
+        val current = getUserStatsDirect()
+        return Pair(false, current.hearts)
     }
 
     suspend fun practiceToEarnHeart(): Boolean {
