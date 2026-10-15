@@ -1,0 +1,6 @@
+{
+  "summary": "Implementation plan for the 25-heart stamina system with passive 5-minute regeneration (deducted per completed exercise set instead of mistakes), HUD decluttering with collapsible telemetry, translucent non-intrusive alert banners, bottom card layout fix, and smart 8-10 second voice coach cooldown.",
+  "updatedAt": "2026-10-15T18:23:18.865558113Z",
+  "requestFeedback": true,
+  "userFacing": true
+}

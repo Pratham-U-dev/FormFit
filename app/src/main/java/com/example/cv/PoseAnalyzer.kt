@@ -19,7 +19,10 @@ data class PoseSkeleton(
     val kneeLeft: LandmarkPoint?,
     val kneeRight: LandmarkPoint?,
     val ankleLeft: LandmarkPoint?,
-    val ankleRight: LandmarkPoint?
+    val ankleRight: LandmarkPoint?,
+    val nose: LandmarkPoint? = null,
+    val mouthLeft: LandmarkPoint? = null,
+    val mouthRight: LandmarkPoint? = null
 )
 
 object PoseGeometry {
@@ -266,10 +269,54 @@ class ExerciseFormEvaluator(
         val elbow = skeleton.elbowLeft ?: skeleton.elbowRight ?: return EvaluationResult.idle("Position elbows in frame")
         val wrist = skeleton.wristLeft ?: skeleton.wristRight ?: return EvaluationResult.idle("Ensure wrists are visible")
 
+        val hip = skeleton.hipLeft ?: skeleton.hipRight
+        val ankle = skeleton.ankleLeft ?: skeleton.ankleRight
+
+        // Spatial Orientation Check: Body must be oriented horizontally in a floor plank
+        var isPlankPosition = true
+        if (ankle != null) {
+            val deltaY = abs(shoulder.y - ankle.y)
+            val deltaX = abs(shoulder.x - ankle.x)
+            // If vertically upright (standing in front of camera)
+            if (deltaY > 0.35f && deltaX < 0.20f && ankle.y > shoulder.y + 0.30f) {
+                isPlankPosition = false
+            }
+        } else if (hip != null) {
+            val deltaY = abs(shoulder.y - hip.y)
+            val deltaX = abs(shoulder.x - hip.x)
+            if (deltaY > 0.28f && deltaX < 0.16f && hip.y > shoulder.y + 0.22f) {
+                isPlankPosition = false
+            }
+        }
+
+        // Floor Hand Placement: Wrists must be positioned on or near floor level (below shoulders)
+        val wristsOnFloor = (wrist.y >= shoulder.y - 0.08f)
+
         val shoulderY = shoulder.y
         updateKinematics(shoulderY, liftedMassFrac = 0.64)
 
         val elbowAngle = PoseGeometry.calculateAngle(shoulder, elbow, wrist)
+
+        // If user is standing upright or hands are not on floor, block push-up rep counting
+        if (!isPlankPosition || !wristsOnFloor) {
+            pushupState = "UP"
+            minPushupAngle = 180.0
+            pushupDeepEnough = false
+            return EvaluationResult(
+                score = 65,
+                mistake = if (!isPlankPosition) "Not in plank position" else "Hands must be on floor",
+                feedback = if (!isPlankPosition) "Assume horizontal plank position on the floor" else "Place hands on the floor below chest",
+                isRepCompleted = false,
+                angleValue = elbowAngle,
+                exerciseState = "AWAITING_PLANK",
+                velocityMps = 0.0,
+                peakPowerW = 0,
+                speedLossPct = 0,
+                isRepRejected = true,
+                rejectionReason = if (!isPlankPosition) "Assume horizontal plank position on the floor" else "Hands must be on the floor"
+            )
+        }
+
         var feedback = "Hold plank, then lower chest"
         var mistake: String? = null
         var isRepCompleted = false
@@ -303,18 +350,33 @@ class ExerciseFormEvaluator(
         } else if (pushupState == "DOWN") {
             if (elbowAngle > 145.0) {
                 pushupState = "UP"
-                isRepCompleted = true
-                onRepFinished()
-                
                 if (!pushupDeepEnough && minPushupAngle > 110.0) {
-                    mistake = "Push-up not deep enough"
-                    feedback = "Lower more! Aim for 90-degree elbows."
-                    score = 70
+                    // Reject rep if too shallow
+                    isRepCompleted = false
+                    mistake = "Push-up too shallow"
+                    feedback = "Rep rejected: Lower chest closer to floor!"
+                    score = 60
+                    minPushupAngle = 180.0
+                    return EvaluationResult(
+                        score = score,
+                        mistake = mistake,
+                        feedback = feedback,
+                        isRepCompleted = false,
+                        angleValue = elbowAngle,
+                        exerciseState = "PLANK",
+                        velocityMps = max(0.0, currentVel),
+                        peakPowerW = sessionPeakPower.toInt(),
+                        speedLossPct = lastRepSpeedLoss,
+                        isRepRejected = true,
+                        rejectionReason = "Push-up too shallow. Lower chest toward floor."
+                    )
                 } else {
+                    isRepCompleted = true
+                    onRepFinished()
                     feedback = "Great explosive push-up!"
                     score = if (mistake != null) 70 else 98
+                    minPushupAngle = 180.0
                 }
-                minPushupAngle = 180.0
             } else {
                 feedback = if (pushupDeepEnough) "Good depth! Press up powerfully." else "Go lower... chest closer to floor."
             }
@@ -447,6 +509,11 @@ class ExerciseFormEvaluator(
         val elbow = skeleton.elbowLeft ?: skeleton.elbowRight ?: return EvaluationResult.idle("Position elbows in frame")
         val wrist = skeleton.wristLeft ?: skeleton.wristRight ?: return EvaluationResult.idle("Hands must grip the bar")
 
+        // 1. Hands Overhead Gating: In a true pull-up, hands must be positioned overhead above shoulders
+        val leftWristOverhead = skeleton.wristLeft != null && skeleton.shoulderLeft != null && skeleton.wristLeft.y < skeleton.shoulderLeft.y - 0.05f
+        val rightWristOverhead = skeleton.wristRight != null && skeleton.shoulderRight != null && skeleton.wristRight.y < skeleton.shoulderRight.y - 0.05f
+        val handsOverhead = leftWristOverhead || rightWristOverhead
+
         val leftElbowAngle = if (skeleton.shoulderLeft != null && skeleton.elbowLeft != null && skeleton.wristLeft != null) {
             PoseGeometry.calculateAngle(skeleton.shoulderLeft, skeleton.elbowLeft, skeleton.wristLeft)
         } else null
@@ -462,6 +529,26 @@ class ExerciseFormEvaluator(
             else -> PoseGeometry.calculateAngle(shoulder, elbow, wrist)
         }
 
+        // If hands are extended horizontally (T-pose) or below shoulders, block rep progression
+        if (!handsOverhead) {
+            pullupState = "HANG"
+            minPullupElbowAngle = 180.0
+            pullupFullRomReached = false
+            return EvaluationResult(
+                score = 65,
+                mistake = "Hands not overhead",
+                feedback = "Reach overhead to grip the pull-up bar",
+                isRepCompleted = false,
+                angleValue = avgElbowAngle,
+                exerciseState = "AWAITING_OVERHEAD",
+                velocityMps = 0.0,
+                peakPowerW = 0,
+                speedLossPct = 0,
+                isRepRejected = true,
+                rejectionReason = "Hands must be overhead on the bar"
+            )
+        }
+
         var feedback = "Dead hang... pull all the way up!"
         var mistake: String? = null
         var isRepCompleted = false
@@ -471,7 +558,16 @@ class ExerciseFormEvaluator(
             minPullupElbowAngle = avgElbowAngle
         }
 
-        if (avgElbowAngle <= 95.0) {
+        // 2. Chin Clearance & Deep ROM Check
+        val wrMidY = when {
+            skeleton.wristLeft != null && skeleton.wristRight != null -> (skeleton.wristLeft.y + skeleton.wristRight.y) / 2f
+            skeleton.wristLeft != null -> skeleton.wristLeft.y
+            else -> skeleton.wristRight!!.y
+        }
+        val chinY = skeleton.mouthLeft?.y ?: skeleton.mouthRight?.y ?: skeleton.nose?.y ?: (shoulder.y - 0.08f)
+        val chinClearedBar = chinY <= wrMidY + 0.04f
+
+        if (chinClearedBar || avgElbowAngle <= 95.0) {
             pullupFullRomReached = true
         }
 
@@ -506,7 +602,7 @@ class ExerciseFormEvaluator(
                 }
             }
             "PULL" -> {
-                if (avgElbowAngle <= 95.0 || pullupFullRomReached) {
+                if (chinClearedBar || avgElbowAngle <= 95.0 || pullupFullRomReached) {
                     pullupState = "TOP"
                     feedback = "Full depth reached! Hold briefly."
                 } else {
@@ -524,17 +620,32 @@ class ExerciseFormEvaluator(
             "LOWER" -> {
                 if (avgElbowAngle >= 140.0) {
                     pullupState = "HANG"
-                    isRepCompleted = true
-
-                    if (!pullupFullRomReached && minPullupElbowAngle > 100.0) {
+                    
+                    if (!pullupFullRomReached || minPullupElbowAngle > 105.0) {
+                        // Strict rep rejection if chin never cleared bar or depth was too shallow
+                        isRepCompleted = false
                         mistake = "Pull-up depth insufficient"
-                        feedback = "Pull higher! Aim for full range of motion."
-                        score = 70
+                        feedback = "Rep rejected: Chin did not clear bar!"
+                        score = 60
+                        minPullupElbowAngle = 180.0
+                        pullupFullRomReached = false
+                        return EvaluationResult(
+                            score = score,
+                            mistake = mistake,
+                            feedback = feedback,
+                            isRepCompleted = false,
+                            angleValue = avgElbowAngle,
+                            exerciseState = "HANG",
+                            isRepRejected = true,
+                            rejectionReason = "Chin did not clear bar height"
+                        )
                     } else {
+                        isRepCompleted = true
                         feedback = "Full lockout & deep pull! Excellent rep."
                         score = if (mistake != null) 75 else 98
                     }
                     minPullupElbowAngle = 180.0
+                    pullupFullRomReached = false
                 } else {
                     feedback = "Lower all the way to full dead hang lockout."
                 }
@@ -561,7 +672,9 @@ data class EvaluationResult(
     val exerciseState: String = "READY",
     val velocityMps: Double = 0.0,
     val peakPowerW: Int = 0,
-    val speedLossPct: Int = 0
+    val speedLossPct: Int = 0,
+    val isRepRejected: Boolean = false,
+    val rejectionReason: String? = null
 ) {
     companion object {
         fun idle(message: String) = EvaluationResult(
@@ -573,7 +686,9 @@ data class EvaluationResult(
             exerciseState = "READY",
             velocityMps = 0.0,
             peakPowerW = 0,
-            speedLossPct = 0
+            speedLossPct = 0,
+            isRepRejected = false,
+            rejectionReason = null
         )
     }
 }

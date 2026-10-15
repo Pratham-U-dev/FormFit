@@ -607,6 +607,9 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    private var lastSpokenRejection = ""
+    private var lastRejectionTimestamp = 0L
+
     // This method is called from real Camera Analyzer frames when Camera Mode is active
     fun processCameraFrameAnalysis(
         score: Int,
@@ -632,8 +635,22 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
             _liveSpeedLossPct.value = metrics.speedLossPct
             _livePeakPowerW.value = metrics.peakPowerW
             _liveVelocityMps.value = metrics.currentSpeedMps
+
+            // Immediate rep rejection audio feedback & penalty
+            if (metrics.lastRepRejected && metrics.rejectionReason != null) {
+                val now = System.currentTimeMillis()
+                if (metrics.rejectionReason != lastSpokenRejection || (now - lastRejectionTimestamp) > 4000L) {
+                    lastSpokenRejection = metrics.rejectionReason
+                    lastRejectionTimestamp = now
+                    com.example.audio.DuoSoundPlayer.playMistake()
+                    com.example.audio.TtsCoach.speak("Rep rejected: ${metrics.rejectionReason}", isUrgent = true)
+                    _currentFeedback.value = "⚠️ Rep rejected: ${metrics.rejectionReason}"
+                    _currentScore.value = (_currentScore.value - 12).coerceAtLeast(40)
+                    deductHeartOnMistake()
+                }
+            }
             
-            // Sync with rep counter
+            // Sync with rep counter (only increments on genuine completed reps)
             if (metrics.repCount > _repCount.value) {
                 val added = metrics.repCount - _repCount.value
                 _repCount.value = metrics.repCount
@@ -657,6 +674,20 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
             _liveSpeedLossPct.value = metrics.speedLossPct
             _livePeakPowerW.value = metrics.peakPowerW
             _liveVelocityMps.value = metrics.currentSpeedMps
+
+            // Immediate rep rejection audio feedback & penalty
+            if (metrics.lastRepRejected && metrics.rejectionReason != null) {
+                val now = System.currentTimeMillis()
+                if (metrics.rejectionReason != lastSpokenRejection || (now - lastRejectionTimestamp) > 4000L) {
+                    lastSpokenRejection = metrics.rejectionReason
+                    lastRejectionTimestamp = now
+                    com.example.audio.DuoSoundPlayer.playMistake()
+                    com.example.audio.TtsCoach.speak("Rep rejected: ${metrics.rejectionReason}", isUrgent = true)
+                    _currentFeedback.value = "⚠️ Rep rejected: ${metrics.rejectionReason}"
+                    _currentScore.value = (_currentScore.value - 12).coerceAtLeast(40)
+                    deductHeartOnMistake()
+                }
+            }
             
             // Sync rep counter with biomechanics engine
             if (metrics.repCount > _repCount.value) {

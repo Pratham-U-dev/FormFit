@@ -1422,7 +1422,10 @@ private fun parsePoseLandmarks(pose: com.google.mlkit.vision.pose.Pose): PoseSke
         kneeLeft = getLandmark(PoseLandmark.LEFT_KNEE),
         kneeRight = getLandmark(PoseLandmark.RIGHT_KNEE),
         ankleLeft = getLandmark(PoseLandmark.LEFT_ANKLE),
-        ankleRight = getLandmark(PoseLandmark.RIGHT_ANKLE)
+        ankleRight = getLandmark(PoseLandmark.RIGHT_ANKLE),
+        nose = getLandmark(PoseLandmark.NOSE),
+        mouthLeft = getLandmark(PoseLandmark.LEFT_MOUTH),
+        mouthRight = getLandmark(PoseLandmark.RIGHT_MOUTH)
     )
 }
 
@@ -1457,11 +1460,34 @@ fun PullUpDashboardHUD(metrics: com.example.cv.PullUpMetrics, targetReps: Int = 
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
+
+            if (!metrics.isHandsOverhead || metrics.phase == "AWAITING_OVERHEAD") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(DuoRed, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text("⚠️ Hands must be overhead to grip the bar", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+            } else if (metrics.lastRepRejected && metrics.rejectionReason != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(DuoRed, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text("❌ Rep rejected: ${metrics.rejectionReason}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+            }
             
             Box(modifier = Modifier
                 .background(
                     if (metrics.phase == "HOLD" || metrics.phase == "TOP") DuoOrange 
                     else if (metrics.phase == "PULL") DuoGreen 
+                    else if (metrics.phase == "AWAITING_OVERHEAD") DuoRed
                     else DuoInk, 
                     RoundedCornerShape(8.dp)
                 )
@@ -1560,6 +1586,28 @@ fun PushUpDashboardHUD(metrics: com.example.cv.PushUpMetrics, targetReps: Int = 
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
+            if (!metrics.isPlankPosture || metrics.phase == "AWAITING_PLANK") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(DuoRed, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text("⚠️ Assume horizontal plank on the floor", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+            } else if (metrics.lastRepRejected && metrics.rejectionReason != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(DuoRed, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text("❌ Rep rejected: ${metrics.rejectionReason}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+            }
+
             // Phase badge — color coded
             Box(
                 modifier = Modifier
@@ -1568,6 +1616,7 @@ fun PushUpDashboardHUD(metrics: com.example.cv.PushUpMetrics, targetReps: Int = 
                             "PRESS"  -> DuoGreen
                             "BOTTOM" -> DuoOrange
                             "LOWER"  -> DuoBlue
+                            "AWAITING_PLANK" -> DuoRed
                             else     -> DuoInk  // PLANK
                         },
                         RoundedCornerShape(8.dp)

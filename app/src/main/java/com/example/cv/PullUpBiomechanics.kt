@@ -48,7 +48,10 @@ data class PullUpMetrics(
     val shoulderYHistory: List<Float> = emptyList(),
     val barY: Float? = null,
     val vRefRep1: Double = 0.0,
-    val currentPowerW: Int = 0
+    val currentPowerW: Int = 0,
+    val isHandsOverhead: Boolean = true,
+    val lastRepRejected: Boolean = false,
+    val rejectionReason: String? = null
 )
 
 class PullUpBiomechanics(
@@ -96,6 +99,9 @@ class PullUpBiomechanics(
     private var repBaseShoulderY = 0f
     private var repMinShoulderY = 1f
     private val repHipXHistory = mutableListOf<Float>()
+    private var chinClearedBarThisRep = false
+    private var lastRepRejected = false
+    private var rejectionReason: String? = null
     
     private val reps = mutableListOf<PullUpRepRecord>()
     private var vRefRep1 = 0.0
@@ -131,6 +137,9 @@ class PullUpBiomechanics(
         repPeakConcVel = 0.0
         repPeakPower = 0.0
         repMinElbow = 180.0
+        chinClearedBarThisRep = false
+        lastRepRejected = false
+        rejectionReason = null
         repHipXHistory.clear()
         lats.deltaTempC = 0.0
         lats.mF = 0.0
@@ -250,11 +259,36 @@ class PullUpBiomechanics(
             else -> null
         }
         
+        // 1. Hand Elevation & Overhead Stance Validation
+        val leftWristOverhead = lWrist != null && lShoulder != null && lWrist.y < lShoulder.y - 0.05f
+        val rightWristOverhead = rWrist != null && rShoulder != null && rWrist.y < rShoulder.y - 0.05f
+        val isHandsOverhead = leftWristOverhead || rightWristOverhead
+
+        // If user drops hands or holds them horizontally, block rep or abort current pull
+        if (!isHandsOverhead) {
+            if (phase == "PULL" || phase == "TOP" || phase == "LOWER") {
+                lastRepRejected = true
+                rejectionReason = "Hands must stay overhead on the bar"
+                repPeakConcVel = 0.0
+                repPeakPower = 0.0
+            }
+            phase = "AWAITING_OVERHEAD"
+        } else if (phase == "AWAITING_OVERHEAD") {
+            phase = "HANG"
+        }
+
+        // Chin level tracking relative to bar (wrMidY)
+        val chinY = skeleton.mouthLeft?.y ?: skeleton.mouthRight?.y ?: skeleton.nose?.y ?: (shMidY - 0.08f)
+        val isChinAtBar = chinY <= wrMidY + 0.04f
+        if (isChinAtBar) {
+            chinClearedBarThisRep = true
+        }
+
         // Pull-Up Finite State Machine
         when (phase) {
             "HANG" -> {
-                // User hanging from bar, initiates pull when elbow flexes (<135°) or upward speed is positive
-                if (currentElbowAngle < 132.0 || (currentSpeed > 0.08 && currentElbowAngle < 145.0)) {
+                // User hanging from bar, initiates pull only if hands are overhead AND (elbow flexes <132° or upward speed is positive)
+                if (isHandsOverhead && (currentElbowAngle < 132.0 || (currentSpeed > 0.08 && currentElbowAngle < 145.0))) {
                     phase = "PULL"
                     repStartTime = timeS
                     repMinElbow = currentElbowAngle
@@ -262,6 +296,7 @@ class PullUpBiomechanics(
                     repPeakPower = currentPower
                     repBaseShoulderY = shMidY
                     repMinShoulderY = shMidY
+                    chinClearedBarThisRep = isChinAtBar
                     repHipXHistory.clear()
                     if (hipMidX != null) repHipXHistory.add(hipMidX)
                 }
@@ -272,9 +307,10 @@ class PullUpBiomechanics(
                 if (currentPower > repPeakPower) repPeakPower = currentPower
                 if (currentElbowAngle < repMinElbow) repMinElbow = currentElbowAngle
                 if (shMidY < repMinShoulderY) repMinShoulderY = shMidY
+                if (isChinAtBar) chinClearedBarThisRep = true
                 
-                // Reached top: elbows flexed deep (<= 95°) OR upward velocity stops near top
-                if (currentElbowAngle <= 95.0 || (currentElbowAngle <= 105.0 && currentSpeed <= 0.02)) {
+                // Reached top: chin clears bar OR deep elbow flexion (<= 95°)
+                if (isChinAtBar || currentElbowAngle <= 95.0 || (currentElbowAngle <= 105.0 && currentSpeed <= 0.02)) {
                     phase = "TOP"
                     repTopTime = timeS
                 } else if (currentSpeed < -0.15 && currentElbowAngle > 115.0) {
@@ -288,6 +324,7 @@ class PullUpBiomechanics(
                 if (hipMidX != null) repHipXHistory.add(hipMidX)
                 if (currentElbowAngle < repMinElbow) repMinElbow = currentElbowAngle
                 if (shMidY < repMinShoulderY) repMinShoulderY = shMidY
+                if (isChinAtBar) chinClearedBarThisRep = true
                 
                 // Initiates descent
                 if (currentElbowAngle > 105.0 || currentSpeed < -0.05) {
@@ -296,10 +333,32 @@ class PullUpBiomechanics(
                 }
             }
             "LOWER" -> {
+                if (isChinAtBar) chinClearedBarThisRep = true
                 // Completed return to full extension at bottom (lockout >= 138°)
                 if (currentElbowAngle >= 138.0) {
-                    recordRep(timeS, currentElbowAngle)
-                    phase = "HANG"
+                    val verticalTravel = repBaseShoulderY - repMinShoulderY
+                    val isValidRep = isHandsOverhead && (chinClearedBarThisRep || (verticalTravel >= 0.10f && repMinElbow <= 100.0))
+                    
+                    if (isValidRep) {
+                        recordRep(timeS, currentElbowAngle)
+                        lastRepRejected = false
+                        rejectionReason = null
+                    } else {
+                        // Strict rep rejection: do not increment rep count
+                        lastRepRejected = true
+                        rejectionReason = when {
+                            !isHandsOverhead -> "Hands must stay overhead on the bar"
+                            verticalTravel < 0.08f -> "No vertical body travel detected"
+                            !chinClearedBarThisRep -> "Chin did not clear bar level"
+                            else -> "Incomplete range of motion"
+                        }
+                        repTopTime = 0.0
+                        repEccStartTime = 0.0
+                        repPeakConcVel = 0.0
+                        repPeakPower = 0.0
+                    }
+                    chinClearedBarThisRep = false
+                    phase = if (isHandsOverhead) "HANG" else "AWAITING_OVERHEAD"
                 }
             }
         }
@@ -355,7 +414,10 @@ class PullUpBiomechanics(
             shoulderYHistory = shoulderYHistory.toList(),
             barY = wrMidY,
             vRefRep1 = vRefRep1,
-            currentPowerW = currentPower.toInt()
+            currentPowerW = currentPower.toInt(),
+            isHandsOverhead = isHandsOverhead,
+            lastRepRejected = lastRepRejected,
+            rejectionReason = rejectionReason
         )
         
         return cachedMetrics

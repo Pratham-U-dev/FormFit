@@ -19,7 +19,7 @@ data class PushUpRepRecord(
 )
 
 data class PushUpMetrics(
-    val phase: String = "PLANK",         // Current phase: PLANK, LOWER, BOTTOM, PRESS
+    val phase: String = "PLANK",         // Current phase: PLANK, LOWER, BOTTOM, PRESS, AWAITING_PLANK
     val repCount: Int = 0,
     val speedLossPct: Int = 0,
     val peakPowerW: Int = 0,
@@ -38,7 +38,10 @@ data class PushUpMetrics(
     val coreEffort: Double = 0.0,
     val shoulderYHistory: List<Float> = emptyList(),
     val vRefRep1: Double = 0.0,
-    val currentPowerW: Int = 0
+    val currentPowerW: Int = 0,
+    val isPlankPosture: Boolean = true,
+    val lastRepRejected: Boolean = false,
+    val rejectionReason: String? = null
 )
 
 class PushUpBiomechanics(
@@ -85,6 +88,9 @@ class PushUpBiomechanics(
     private var repBaseShoulderY = 0f
     private var repMaxShoulderY = 0f
     private var hipSagThisRep = false
+    private var isPlankPosture = true
+    private var lastRepRejected = false
+    private var rejectionReason: String? = null
 
     private val reps = mutableListOf<PushUpRepRecord>()
     private var vRefRep1 = 0.0
@@ -126,6 +132,9 @@ class PushUpBiomechanics(
         repBaseShoulderY = 0f
         repMaxShoulderY = 0f
         hipSagThisRep = false
+        isPlankPosture = true
+        lastRepRejected = false
+        rejectionReason = null
 
         reps.clear()
         vRefRep1 = 0.0
@@ -273,10 +282,42 @@ class PushUpBiomechanics(
             currentPower = 0.0
         }
 
+        // Spatial Orientation Check: Is user in a floor plank rather than standing vertically?
+        isPlankPosture = true
+        if (ankleMidY != null && ankleMidX != null) {
+            val deltaY = abs(shMidY - ankleMidY)
+            val deltaX = abs(shMidX - ankleMidX)
+            if (deltaY > 0.35f && deltaX < 0.22f && ankleMidY > shMidY + 0.30f) {
+                isPlankPosture = false
+            }
+        } else if (hipMidY != null && hipMidX != null) {
+            val deltaY = abs(shMidY - hipMidY)
+            val deltaX = abs(shMidX - hipMidX)
+            if (deltaY > 0.28f && deltaX < 0.16f && hipMidY > shMidY + 0.22f) {
+                isPlankPosture = false
+            }
+        }
+
+        // Floor Hand Placement: Wrists must be on floor level (at or below shoulders)
+        val wristsOnFloor = (lw != null && ls != null && lw.y >= ls.y - 0.08f) ||
+                            (rw != null && rs != null && rw.y >= rs.y - 0.08f)
+
+        if (!isPlankPosture || !wristsOnFloor) {
+            if (phase == "LOWER" || phase == "BOTTOM" || phase == "PRESS") {
+                lastRepRejected = true
+                rejectionReason = if (!isPlankPosture) "Assume horizontal plank position on floor" else "Hands must be on floor"
+                repPeakPressVel = 0.0
+                repPeakPower = 0.0
+            }
+            phase = "AWAITING_PLANK"
+        } else if (phase == "AWAITING_PLANK") {
+            phase = "PLANK"
+        }
+
         // Step 8: State Machine
         when (phase) {
             "PLANK" -> {
-                if (currentElbowAngle < 150.0) {
+                if (isPlankPosture && wristsOnFloor && currentElbowAngle < 150.0) {
                     phase = "LOWER"
                     repStartTime = timeS
                     repMinElbow = currentElbowAngle
@@ -313,8 +354,28 @@ class PushUpBiomechanics(
                 if (currentSpeed > repPeakPressVel) repPeakPressVel = currentSpeed
 
                 if (currentElbowAngle >= 155.0) {
-                    recordRep(timeS, currentElbowAngle)
-                    phase = "PLANK"
+                    val chestDescent = repMaxShoulderY - repBaseShoulderY
+                    val isDeepEnough = repMinElbow <= 100.0 || chestDescent >= 0.05f
+                    val isValidRep = isPlankPosture && wristsOnFloor && isDeepEnough
+
+                    if (isValidRep) {
+                        recordRep(timeS, currentElbowAngle)
+                        lastRepRejected = false
+                        rejectionReason = null
+                    } else {
+                        lastRepRejected = true
+                        rejectionReason = when {
+                            !isPlankPosture -> "Assume horizontal plank position on the floor"
+                            !wristsOnFloor -> "Hands must remain on the floor"
+                            !isDeepEnough -> "Push-up too shallow. Lower chest closer to floor"
+                            else -> "Incomplete range of motion"
+                        }
+                        repBottomTime = 0.0
+                        repPressStartTime = 0.0
+                        repPeakPressVel = 0.0
+                        repPeakPower = 0.0
+                    }
+                    phase = if (isPlankPosture && wristsOnFloor) "PLANK" else "AWAITING_PLANK"
                 }
             }
         }
@@ -380,7 +441,10 @@ class PushUpBiomechanics(
             coreEffort = core.activation,
             shoulderYHistory = shoulderYHistory.toList(),
             vRefRep1 = vRefRep1,
-            currentPowerW = currentPower.toInt()
+            currentPowerW = currentPower.toInt(),
+            isPlankPosture = isPlankPosture,
+            lastRepRejected = lastRepRejected,
+            rejectionReason = rejectionReason
         )
 
         return cachedMetrics
