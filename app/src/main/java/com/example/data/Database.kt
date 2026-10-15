@@ -28,7 +28,7 @@ data class UserStats(
     @PrimaryKey val id: Int = 1,
     val level: Int = 1,
     val currentXp: Int = 0,
-    val streakDays: Int = 3,
+    val streakDays: Int = 1,
     val lastWorkoutTimestamp: Long = 0L,
     val unlockedBadgesCsv: String = "first_workout",
     val gems: Int = 450,
@@ -36,7 +36,9 @@ data class UserStats(
     val maxHearts: Int = 5,
     val streakFreezesEquipped: Int = 1,
     val isSuperSubscriber: Boolean = false,
-    val doubleXpActiveUntil: Long = 0L
+    val doubleXpActiveUntil: Long = 0L,
+    val formShieldActive: Boolean = false,
+    val lastHeartRefillTimestamp: Long = 0L
 )
 
 @Entity(tableName = "user_body_profile")
@@ -132,7 +134,7 @@ interface UserProfileDao {
     suspend fun deleteUserProfile()
 }
 
-@Database(entities = [WorkoutSession::class, UserStats::class, UserBodyProfile::class, NutritionLog::class], version = 4, exportSchema = false)
+@Database(entities = [WorkoutSession::class, UserStats::class, UserBodyProfile::class, NutritionLog::class], version = 5, exportSchema = false)
 abstract class FormFitDatabase : RoomDatabase() {
     abstract fun workoutDao(): WorkoutDao
     abstract fun userStatsDao(): UserStatsDao

@@ -47,14 +47,27 @@ fun StreakDialog(
     val stats by viewModel.userStats.collectAsState()
     var selectedTab by remember { mutableStateOf("PERSONAL") }
 
-    val friendsList = remember {
-        mutableStateListOf(
-            FriendStreak("1", "V S Anish Bangera", 92, "👨‍🎤"),
-            FriendStreak("2", "Yojan D", 77, "🕶️"),
-            FriendStreak("3", "Phelicia Dsilva", 58, "👩‍🦰"),
-            FriendStreak("4", "Sean Dsouza", 30, "🤓"),
-            FriendStreak("5", "Regherethere", 0, "🤖", isPending = true)
-        )
+    val leaderboardUsers by viewModel.leaderboard.collectAsState()
+    val friendsList = remember(leaderboardUsers) {
+        val remoteFriends = leaderboardUsers.filter { !it.isUser }.mapIndexed { index, user ->
+            FriendStreak(
+                id = "$index",
+                name = user.name,
+                streak = user.streak,
+                avatarEmoji = user.characterIcon
+            )
+        }
+        if (remoteFriends.isNotEmpty()) {
+            remoteFriends.toMutableStateList()
+        } else {
+            mutableStateListOf(
+                FriendStreak("1", "Alex (Apex)", 14, "🦉"),
+                FriendStreak("2", "Sarah (Pro)", 8, "👧"),
+                FriendStreak("3", "Devin (Beast)", 6, "👱‍♀️"),
+                FriendStreak("4", "Marcus (Titan)", 4, "🧔"),
+                FriendStreak("5", "Elena (Speed)", 2, "👨‍🎨")
+            )
+        }
     }
 
     Dialog(
@@ -206,13 +219,13 @@ private fun PersonalStreakContent(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "$streakDays",
-                        color = Color(0xFF8596A0),
+                        color = if (streakDays > 0) Color(0xFFFF9600) else Color(0xFF8596A0),
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 56.sp
                     )
                     Text(
                         text = "day streak!",
-                        color = Color(0xFF8596A0),
+                        color = if (streakDays > 0) Color.White else Color(0xFF8596A0),
                         fontWeight = FontWeight.Bold,
                         fontSize = 24.sp
                     )

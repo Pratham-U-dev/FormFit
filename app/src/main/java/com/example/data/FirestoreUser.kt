@@ -14,5 +14,9 @@ data class FirestoreUser(
     val streak: Int = 1,
     val lastWorkoutDate: String = "",
     val achievements: List<String> = emptyList(),
-    val avatarIcon: String = "💪"
+    val avatarIcon: String = "💪",
+    val gems: Int = 450,
+    val hearts: Int = 5,
+    val streakFreezes: Int = 1,
+    val isSuper: Boolean = false
 )

@@ -102,6 +102,10 @@ fun PracticeScreen(
     val livePeakPowerW by viewModel.livePeakPowerW.collectAsState()
     val liveVelocityMps by viewModel.liveVelocityMps.collectAsState()
     val bodyProfile by viewModel.userBodyProfile.collectAsState()
+    val userStats by viewModel.userStats.collectAsState()
+    var showHeartsDialog by remember { mutableStateOf(false) }
+    var showShopDialog by remember { mutableStateOf(false) }
+    var showStreakDialog by remember { mutableStateOf(false) }
 
     val cameraPermissionState = rememberPermissionState(permission = Manifest.permission.CAMERA)
 
@@ -125,6 +129,95 @@ fun PracticeScreen(
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // DUOLINGO TOP PILLS ROW (Streak, Diamond, Hearts)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Streak Pill
+            Row(
+                modifier = Modifier
+                    .background(Color(0xFFFFF3E0), shape = RoundedCornerShape(12.dp))
+                    .border(1.5.dp, Color(0xFFFFB74D), shape = RoundedCornerShape(12.dp))
+                    .clickable { showStreakDialog = true }
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("🔥", fontSize = 13.sp)
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "${userStats.streakDays}",
+                    color = Color(0xFFE65100),
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 13.sp
+                )
+            }
+
+            // Gems (Diamond) Pill
+            Row(
+                modifier = Modifier
+                    .background(Color(0xFFE1F5FE), shape = RoundedCornerShape(12.dp))
+                    .border(1.5.dp, Color(0xFF81D4FA), shape = RoundedCornerShape(12.dp))
+                    .clickable { showShopDialog = true }
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("💎", fontSize = 13.sp)
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "${userStats.gems}",
+                    color = Color(0xFF0277BD),
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 13.sp
+                )
+            }
+
+            // Hearts Pill
+            Row(
+                modifier = Modifier
+                    .background(if (userStats.hearts > 0) Color(0xFFFFEBEE) else Color(0xFFFFCDD2), shape = RoundedCornerShape(12.dp))
+                    .border(1.5.dp, if (userStats.hearts > 0) Color(0xFFEF9A9A) else Color(0xFFE53935), shape = RoundedCornerShape(12.dp))
+                    .clickable { showHeartsDialog = true }
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("❤️", fontSize = 13.sp)
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = if (userStats.isSuperSubscriber) "∞" else "${userStats.hearts}",
+                    color = Color(0xFFC62828),
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 13.sp
+                )
+            }
+        }
+
+        // Out of Hearts Warning Alert
+        if (userStats.hearts <= 0 && !userStats.isSuperSubscriber && !isVirtual) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+                    .background(Color(0xFFFFEBEE), RoundedCornerShape(12.dp))
+                    .border(1.5.dp, Color(0xFFE53935), RoundedCornerShape(12.dp))
+                    .clickable { showHeartsDialog = true }
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("💔", fontSize = 18.sp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Out of hearts!", fontWeight = FontWeight.ExtraBold, color = Color(0xFFC62828), fontSize = 12.sp)
+                        Text("Refill with gems or switch to Info mode to practice safely.", color = DuoInk, fontSize = 10.5.sp)
+                    }
+                    Text("REFILL", fontWeight = FontWeight.ExtraBold, color = DuoBlue, fontSize = 11.5.sp)
+                }
+            }
+        }
+
         // TOP CONTROL HEADER
         Row(
             modifier = Modifier
@@ -430,6 +523,31 @@ fun PracticeScreen(
                 }
             }
         }
+    }
+
+    if (showHeartsDialog) {
+        com.example.ui.components.HeartsDialog(
+            viewModel = viewModel,
+            onDismiss = { showHeartsDialog = false }
+        )
+    }
+
+    if (showShopDialog) {
+        com.example.ui.components.ShopDialog(
+            viewModel = viewModel,
+            onDismiss = { showShopDialog = false }
+        )
+    }
+
+    if (showStreakDialog) {
+        com.example.ui.components.StreakDialog(
+            viewModel = viewModel,
+            onDismiss = { showStreakDialog = false },
+            onStartWorkout = {
+                showStreakDialog = false
+                viewModel.setVirtualCoachMode(false)
+            }
+        )
     }
 }
 

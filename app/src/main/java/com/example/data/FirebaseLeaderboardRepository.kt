@@ -195,7 +195,11 @@ class FirebaseLeaderboardRepository(private val context: Context) {
         overallAvgFormScore: Int,
         streakCount: Int,
         todayDateStr: String,
-        unlockedBadgesList: List<String>
+        unlockedBadgesList: List<String>,
+        gems: Int = 450,
+        hearts: Int = 5,
+        streakFreezes: Int = 1,
+        isSuper: Boolean = false
     ) {
         val uid = _currentUid.value ?: return
         val currentName = prefs.getString("local_display_name", "") ?: ""
@@ -222,7 +226,11 @@ class FirebaseLeaderboardRepository(private val context: Context) {
             streak = streakCount,
             lastWorkoutDate = todayDateStr,
             achievements = unlockedBadgesList,
-            avatarIcon = _currentUserProfile.value?.avatarIcon ?: "💪"
+            avatarIcon = _currentUserProfile.value?.avatarIcon ?: "💪",
+            gems = gems,
+            hearts = hearts,
+            streakFreezes = streakFreezes,
+            isSuper = isSuper
         )
 
         _currentUserProfile.value = updatedProfile
@@ -295,7 +303,10 @@ class FirebaseLeaderboardRepository(private val context: Context) {
                 xp = user.xp,
                 rank = index + 1,
                 characterIcon = if (user.avatarIcon.isNotBlank()) user.avatarIcon else "💪",
-                isUser = isMe
+                isUser = isMe,
+                streak = user.streak,
+                gems = user.gems,
+                hearts = user.hearts
             )
         }
 
@@ -316,7 +327,8 @@ class FirebaseLeaderboardRepository(private val context: Context) {
     private fun syncToSupabase(baseUrl: String, anonKey: String, user: FirestoreUser) {
         val cleanBaseUrl = normalizeSupabaseUrl(baseUrl)
         try {
-            val bodyJson = JSONObject().apply {
+            // Full JSON with streak, diamond (gems) and health (hearts)
+            val fullBodyJson = JSONObject().apply {
                 put("uid", user.uid)
                 put("display_name", user.displayName)
                 put("xp", user.xp)
@@ -326,6 +338,10 @@ class FirebaseLeaderboardRepository(private val context: Context) {
                 put("average_form_score", user.averageFormScore)
                 put("streak", user.streak)
                 put("avatar_icon", user.avatarIcon)
+                put("gems", user.gems)
+                put("hearts", user.hearts)
+                put("streak_freezes", user.streakFreezes)
+                put("is_super", user.isSuper)
             }
 
             val mediaType = "application/json; charset=utf-8".toMediaType()
@@ -334,10 +350,35 @@ class FirebaseLeaderboardRepository(private val context: Context) {
                 .header("apikey", anonKey)
                 .header("Authorization", "Bearer $anonKey")
                 .header("Prefer", "resolution=merge-duplicates")
-                .post(bodyJson.toString().toRequestBody(mediaType))
+                .post(fullBodyJson.toString().toRequestBody(mediaType))
                 .build()
 
-            okHttpClient.newCall(request).execute().close()
+            val response = okHttpClient.newCall(request).execute()
+            if (!response.isSuccessful && response.code >= 400) {
+                response.close()
+                // Fallback to basic schema in case user's Supabase table doesn't have the new columns yet
+                val baseBodyJson = JSONObject().apply {
+                    put("uid", user.uid)
+                    put("display_name", user.displayName)
+                    put("xp", user.xp)
+                    put("level", user.level)
+                    put("workout_count", user.workoutCount)
+                    put("total_reps", user.totalReps)
+                    put("average_form_score", user.averageFormScore)
+                    put("streak", user.streak)
+                    put("avatar_icon", user.avatarIcon)
+                }
+                val fallbackRequest = Request.Builder()
+                    .url("$cleanBaseUrl/rest/v1/leaderboard")
+                    .header("apikey", anonKey)
+                    .header("Authorization", "Bearer $anonKey")
+                    .header("Prefer", "resolution=merge-duplicates")
+                    .post(baseBodyJson.toString().toRequestBody(mediaType))
+                    .build()
+                okHttpClient.newCall(fallbackRequest).execute().close()
+            } else {
+                response.close()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error syncing to Supabase: ${e.message}")
         }
@@ -371,6 +412,10 @@ class FirebaseLeaderboardRepository(private val context: Context) {
                     val avgForm = obj.optInt("average_form_score", 0)
                     val streak = obj.optInt("streak", 1)
                     val avatar = obj.optString("avatar_icon", "💪")
+                    val gems = obj.optInt("gems", 450)
+                    val hearts = obj.optInt("hearts", 5)
+                    val streakFreezes = obj.optInt("streak_freezes", 1)
+                    val isSuper = obj.optBoolean("is_super", false)
 
                     result.add(
                         FirestoreUser(
@@ -382,7 +427,11 @@ class FirebaseLeaderboardRepository(private val context: Context) {
                             totalReps = totalReps,
                             averageFormScore = avgForm,
                             streak = streak,
-                            avatarIcon = avatar
+                            avatarIcon = avatar,
+                            gems = gems,
+                            hearts = hearts,
+                            streakFreezes = streakFreezes,
+                            isSuper = isSuper
                         )
                     )
                 }
@@ -391,6 +440,38 @@ class FirebaseLeaderboardRepository(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Error fetching from Supabase: ${e.message}")
             return null
+        }
+    }
+
+    suspend fun testConnection(): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+        val url = _supabaseUrl.value
+        val anonKey = _supabaseAnonKey.value
+        if (url.isBlank() || anonKey.isBlank()) {
+            return@withContext Pair(false, "Supabase URL or Anon Key is missing")
+        }
+        val cleanUrl = normalizeSupabaseUrl(url)
+        try {
+            val request = Request.Builder()
+                .url("$cleanUrl/rest/v1/leaderboard?select=uid&limit=10")
+                .header("apikey", anonKey)
+                .header("Authorization", "Bearer $anonKey")
+                .get()
+                .build()
+
+            okHttpClient.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    val body = response.body?.string() ?: "[]"
+                    val array = JSONArray(body)
+                    _isSupabaseConnected.value = true
+                    Pair(true, "Connected! Synced with Supabase (${array.length()} users found)")
+                } else {
+                    _isSupabaseConnected.value = false
+                    Pair(false, "HTTP ${response.code}: ${response.message}")
+                }
+            }
+        } catch (e: Exception) {
+            _isSupabaseConnected.value = false
+            Pair(false, "Network error: ${e.localizedMessage ?: e.message}")
         }
     }
 

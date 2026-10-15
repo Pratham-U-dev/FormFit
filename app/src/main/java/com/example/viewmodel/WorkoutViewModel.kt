@@ -14,6 +14,7 @@ import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -31,7 +32,10 @@ data class LeaderboardEntry(
     val xp: Int,
     val rank: Int,
     val characterIcon: String,
-    val isUser: Boolean = false
+    val isUser: Boolean = false,
+    val streak: Int = 1,
+    val gems: Int = 450,
+    val hearts: Int = 5
 )
 
 data class Badge(
@@ -302,6 +306,21 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                 pushUpBiomechanics.updateBodyParams(profile.weightKg, profile.heightCm)
             }
         }
+        // Passive heart regeneration check
+        viewModelScope.launch {
+            repository.getUserStatsDirect()
+            while (isActive) {
+                delay(60000L) // Check passive heart recovery every minute
+                repository.getUserStatsDirect()
+            }
+        }
+    }
+
+    fun testSupabaseConnection(onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val res = firebaseRepo.testConnection()
+            onResult(res.first, res.second)
+        }
     }
 
     fun saveDisplayName(name: String) {
@@ -364,8 +383,31 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                 overallAvgFormScore = avgScore,
                 streakCount = stats.streakDays,
                 todayDateStr = todayDateString,
-                unlockedBadgesList = badges
+                unlockedBadgesList = badges,
+                gems = stats.gems,
+                hearts = stats.hearts,
+                streakFreezes = stats.streakFreezesEquipped,
+                isSuper = stats.isSuperSubscriber
             )
+        }
+    }
+
+    private var lastHeartPenaltyTime = 0L
+
+    fun deductHeartOnMistake(onOutOfHearts: () -> Unit = {}) {
+        val now = System.currentTimeMillis()
+        if (now - lastHeartPenaltyTime < 8000L) return // 8 second cooldown between penalties
+        lastHeartPenaltyTime = now
+        viewModelScope.launch {
+            val (lostHeart, remaining) = repository.deductHeartOnMistake()
+            if (lostHeart) {
+                com.example.audio.DuoSoundPlayer.playMistake()
+                com.example.audio.TtsCoach.speak("Watch your form! 1 heart lost. $remaining hearts left.", isUrgent = true)
+                updateLeaderboard(0)
+                if (remaining <= 0) {
+                    onOutOfHearts()
+                }
+            }
         }
     }
 
@@ -374,6 +416,7 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
             repository.addGems(amount)
             com.example.audio.DuoSoundPlayer.playFanfare()
             com.example.audio.TtsCoach.speak("Awesome! $amount gems added to your account.", isUrgent = true)
+            updateLeaderboard(0)
         }
     }
 
@@ -389,6 +432,7 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                 repository.setStreakFreezes(stats.streakFreezesEquipped + 1)
                 com.example.audio.DuoSoundPlayer.playCorrect()
                 com.example.audio.TtsCoach.speak("Streak Freeze equipped!", isUrgent = true)
+                updateLeaderboard(0)
                 onResult(true)
             } else {
                 com.example.audio.DuoSoundPlayer.playMistake()
@@ -405,6 +449,7 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                 repository.refillHearts()
                 com.example.audio.DuoSoundPlayer.playCorrect()
                 com.example.audio.TtsCoach.speak("Hearts fully restored to five!", isUrgent = true)
+                updateLeaderboard(0)
                 onResult(true)
             } else {
                 com.example.audio.DuoSoundPlayer.playMistake()
@@ -421,6 +466,7 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                 repository.updateHearts(stats.hearts + 1)
                 com.example.audio.DuoSoundPlayer.playCorrect()
                 com.example.audio.TtsCoach.speak("Practice complete! +1 heart earned.", isUrgent = true)
+                updateLeaderboard(0)
             }
         }
     }
@@ -431,9 +477,12 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
             if (success) {
                 if (powerUpName.contains("Double XP", ignoreCase = true)) {
                     repository.activateDoubleXp(30)
+                } else if (powerUpName.contains("Shield", ignoreCase = true)) {
+                    repository.activateFormShield()
                 }
                 com.example.audio.DuoSoundPlayer.playCorrect()
                 com.example.audio.TtsCoach.speak("$powerUpName activated!", isUrgent = true)
+                updateLeaderboard(0)
                 onResult(true)
             } else {
                 com.example.audio.DuoSoundPlayer.playMistake()
@@ -452,6 +501,7 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
             } else {
                 com.example.audio.DuoSoundPlayer.playClick()
             }
+            updateLeaderboard(0)
         }
     }
 
@@ -626,6 +676,9 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                     com.example.audio.DuoSoundPlayer.playCorrect()
                 } else {
                     com.example.audio.DuoSoundPlayer.playMistake()
+                    if (repScore < 75) {
+                        deductHeartOnMistake()
+                    }
                 }
                 metrics.lastRep?.formVerdict?.let { verdict ->
                     com.example.audio.TtsCoach.speak("${metrics.repCount}. $verdict", isUrgent = true)
@@ -644,6 +697,9 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                     com.example.audio.DuoSoundPlayer.playCorrect()
                 } else {
                     com.example.audio.DuoSoundPlayer.playMistake()
+                    if (score < 75) {
+                        deductHeartOnMistake()
+                    }
                 }
                 com.example.audio.TtsCoach.speak("Rep ${_repCount.value}. $feedback", isUrgent = true)
             }
@@ -655,6 +711,7 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                 _mistakesList.value = _mistakesList.value + mistake
                 if (_mistakesList.value.size > previousSize) {
                     com.example.audio.DuoSoundPlayer.playMistake()
+                    deductHeartOnMistake()
                 }
             }
             val spokenCorrection = feedback.ifBlank { mistake }
